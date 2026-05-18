@@ -1,0 +1,112 @@
+'use server';
+
+import { auth } from '@clerk/nextjs/server';
+import { db } from '@/lib/db';
+import { receipts, userProfiles, auditLogs } from '@/lib/db/schema';
+import { eq, and } from 'drizzle-orm';
+import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
+
+async function getProfileId(): Promise<string> {
+  const { userId: clerkUserId } = await auth();
+  if (!clerkUserId) throw new Error('Unauthorized');
+
+  const profiles = await db
+    .select({ id: userProfiles.id })
+    .from(userProfiles)
+    .where(eq(userProfiles.clerkUserId, clerkUserId))
+    .limit(1);
+
+  const profileId = profiles[0]?.id;
+  if (!profileId) throw new Error('Profile not found');
+  return profileId;
+}
+
+export async function updateReceipt(receiptId: string, formData: FormData) {
+  const profileId = await getProfileId();
+
+  // Verify ownership
+  const existing = await db
+    .select({ id: receipts.id })
+    .from(receipts)
+    .where(and(eq(receipts.id, receiptId), eq(receipts.userId, profileId)))
+    .limit(1);
+
+  if (!existing[0]) throw new Error('Receipt not found');
+
+  const fields: Record<string, string | null | boolean | number> = {};
+  const auditEntries: { field: string; oldValue?: string | null; newValue?: string | null }[] = [];
+
+  const stringFields = [
+    'merchant', 'merchantAbn', 'category', 'subcategory',
+    'paymentMethod', 'receiptType', 'notes', 'taxCategory',
+    'fuelType',
+  ] as const;
+
+  for (const f of stringFields) {
+    const val = formData.get(f);
+    if (val !== null) {
+      fields[f] = val === '' ? null : (val as string);
+      auditEntries.push({ field: f, newValue: val === '' ? null : (val as string) });
+    }
+  }
+
+  const numFields = ['totalAmount', 'gstAmount', 'subtotalAmount', 'fuelLitres'] as const;
+  for (const f of numFields) {
+    const val = formData.get(f);
+    if (val !== null) {
+      fields[f] = val === '' ? null : (val as string);
+      auditEntries.push({ field: f, newValue: val === '' ? null : (val as string) });
+    }
+  }
+
+  const bpVal = formData.get('businessPercentage');
+  if (bpVal !== null) {
+    fields['businessPercentage'] = bpVal === '' ? 0 : parseInt(bpVal as string, 10);
+    auditEntries.push({ field: 'businessPercentage', newValue: bpVal as string });
+  }
+
+  const dateVal = formData.get('receiptDate');
+  if (dateVal !== null) {
+    (fields as Record<string, unknown>)['receiptDate'] = dateVal === '' ? null : new Date(dateVal as string);
+    auditEntries.push({ field: 'receiptDate', newValue: dateVal as string });
+  }
+
+  const claimableVal = formData.get('taxClaimable');
+  if (claimableVal !== null) {
+    fields['taxClaimable'] = claimableVal === 'true' ? true : claimableVal === 'false' ? false : null;
+    auditEntries.push({ field: 'taxClaimable', newValue: claimableVal as string });
+  }
+
+  if (Object.keys(fields).length === 0) return;
+
+  await db
+    .update(receipts)
+    .set({ ...fields, updatedAt: new Date() })
+    .where(eq(receipts.id, receiptId));
+
+  // Audit log entries
+  for (const entry of auditEntries) {
+    await db.insert(auditLogs).values({
+      userId: profileId,
+      receiptId,
+      action: 'manual_edit',
+      fieldChanged: entry.field,
+      newValue: entry.newValue,
+    });
+  }
+
+  revalidatePath(`/dashboard/receipts/${receiptId}`);
+  revalidatePath('/dashboard/receipts');
+}
+
+export async function deleteReceipt(receiptId: string) {
+  const profileId = await getProfileId();
+
+  await db
+    .delete(receipts)
+    .where(and(eq(receipts.id, receiptId), eq(receipts.userId, profileId)));
+
+  revalidatePath('/dashboard/receipts');
+  redirect('/dashboard/receipts');
+}
