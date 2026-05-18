@@ -14,9 +14,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Docket — Your receipts, finally sorted.',
+  title: {
+    default: 'Docket — AI Receipt Scanner & Expense Tracker for Australian Taxpayers',
+    template: '%s | Docket',
+  },
   description:
-    'AI-powered receipt intelligence for the Australian market. Organise, search, and export your receipts with near-zero effort.',
+    'AI-powered receipt intelligence for the Australian market. Scan receipts, track tax-deductible expenses, and export clean reports for your accountant.',
+  metadataBase: new URL('https://docket.com.au'),
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
