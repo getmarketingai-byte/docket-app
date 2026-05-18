@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -11,6 +12,7 @@ import {
   Settings,
   FileText,
   Menu,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -24,7 +26,7 @@ const navItems = [
   { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ];
 
-function NavLinks({ onClick }: { onClick?: () => void }) {
+function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
 
   return (
@@ -33,7 +35,7 @@ function NavLinks({ onClick }: { onClick?: () => void }) {
         <Link
           key={href}
           href={href}
-          onClick={onClick}
+          onClick={onNavigate}
           className={cn(
             'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
             pathname === href
@@ -49,34 +51,49 @@ function NavLinks({ onClick }: { onClick?: () => void }) {
   );
 }
 
+/** Desktop sidebar — rendered in the layout flex row */
 export function Sidebar() {
   return (
-    <>
-      {/* Desktop sidebar */}
-      <aside className="hidden w-56 shrink-0 border-r bg-background lg:block">
-        <div className="flex h-full flex-col gap-4 p-4">
-          <div className="flex items-center gap-2 px-3 py-2">
-            <FileText className="h-5 w-5 text-primary" />
-            <span className="text-lg font-bold">Docket</span>
-          </div>
-          <NavLinks />
+    <aside className="hidden w-56 shrink-0 border-r bg-background lg:flex lg:flex-col">
+      <div className="flex h-full flex-col gap-4 p-4">
+        <div className="flex items-center gap-2 px-3 py-2">
+          <FileText className="h-5 w-5 text-primary" />
+          <span className="text-lg font-bold">Docket</span>
         </div>
-      </aside>
+        <NavLinks />
+      </div>
+    </aside>
+  );
+}
 
-      {/* Mobile sidebar (Sheet) */}
-      <Sheet>
-        <SheetTrigger className="lg:hidden inline-flex items-center justify-center rounded-md p-2 hover:bg-accent">
-          <Menu className="h-5 w-5" />
-          <span className="sr-only">Open menu</span>
-        </SheetTrigger>
-        <SheetContent side="left" className="w-56 p-4">
-          <div className="flex items-center gap-2 px-3 py-2 mb-4">
+/** Mobile nav — hamburger button + slide-out sheet, rendered in Topbar */
+export function MobileNav() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger
+        className="lg:hidden inline-flex items-center justify-center rounded-md p-2 hover:bg-accent"
+        aria-label="Open menu"
+      >
+        <Menu className="h-5 w-5" />
+      </SheetTrigger>
+      <SheetContent side="left" className="w-56 p-4">
+        <div className="flex items-center justify-between px-3 py-2 mb-4">
+          <div className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-primary" />
             <span className="text-lg font-bold">Docket</span>
           </div>
-          <NavLinks />
-        </SheetContent>
-      </Sheet>
-    </>
+          <button
+            onClick={() => setOpen(false)}
+            className="rounded-md p-1 hover:bg-accent"
+            aria-label="Close menu"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <NavLinks onNavigate={() => setOpen(false)} />
+      </SheetContent>
+    </Sheet>
   );
 }

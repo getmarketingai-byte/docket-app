@@ -95,7 +95,7 @@ export function ReceiptInbox({ refreshTrigger }: Props) {
             </div>
             <div className="flex items-center gap-2">
               {r.totalAmount && (
-                <span className="text-sm font-semibold">${r.totalAmount}</span>
+                <span className="text-sm font-semibold">${parseFloat(r.totalAmount).toFixed(2)}</span>
               )}
               <Badge variant={cfg.variant} className="gap-1 text-xs">
                 {cfg.icon}
