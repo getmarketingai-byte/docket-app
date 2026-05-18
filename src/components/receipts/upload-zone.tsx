@@ -18,7 +18,7 @@ type Props = {
   onUploadComplete?: (receiptId: string) => void;
 };
 
-const ACCEPT = 'image/jpeg,image/png,image/webp,image/heic,.pdf';
+const ACCEPT = 'image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf';
 const MAX_SIZE = 20 * 1024 * 1024; // 20MB
 
 export function UploadZone({ onUploadComplete }: Props) {
