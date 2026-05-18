@@ -31,7 +31,25 @@ export async function getCurrentUserProfileId(): Promise<string | null> {
     .where(eq(userProfiles.clerkUserId, clerkUserId))
     .limit(1);
 
-  return profiles[0]?.id ?? null;
+  if (profiles[0]?.id) return profiles[0].id;
+
+  // Profile missing (webhook may have failed) — auto-create on first login
+  const inserted = await db
+    .insert(userProfiles)
+    .values({ clerkUserId })
+    .onConflictDoNothing()
+    .returning({ id: userProfiles.id });
+
+  if (inserted[0]?.id) return inserted[0].id;
+
+  // Race condition: another request inserted first — re-fetch
+  const refetch = await db
+    .select({ id: userProfiles.id })
+    .from(userProfiles)
+    .where(eq(userProfiles.clerkUserId, clerkUserId))
+    .limit(1);
+
+  return refetch[0]?.id ?? null;
 }
 
 /**
