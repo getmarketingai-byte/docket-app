@@ -18,9 +18,7 @@ export function VehicleAddForm() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button><Plus className="h-4 w-4 mr-2" /> Add vehicle</Button>
-      </DialogTrigger>
+      <DialogTrigger render={<Button><Plus className="h-4 w-4 mr-2" /> Add vehicle</Button>} />
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Add vehicle</DialogTitle>
