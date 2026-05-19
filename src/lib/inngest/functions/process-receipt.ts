@@ -2,6 +2,7 @@ import { inngest } from '../client';
 import { db } from '@/lib/db';
 import { receipts, auditLogs } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
+import { detectDuplicate } from '@/lib/duplicates';
 import { put } from '@vercel/blob';
 import Anthropic from '@anthropic-ai/sdk';
 
@@ -166,7 +167,36 @@ export const processReceipt = inngest.createFunction(
         .where(eq(receipts.id, receiptId));
     });
 
-    // Step 4: Audit log
+    // Step 4: Duplicate detection
+    await step.run('duplicate-check', async () => {
+      const [current] = await db
+        .select({
+          merchant: receipts.merchant,
+          totalAmount: receipts.totalAmount,
+          receiptDate: receipts.receiptDate,
+        })
+        .from(receipts)
+        .where(eq(receipts.id, receiptId))
+        .limit(1);
+
+      if (!current) return;
+
+      const originalId = await detectDuplicate(
+        receiptId,
+        userId,
+        current.merchant,
+        current.totalAmount,
+        current.receiptDate,
+      );
+
+      if (originalId) {
+        await db.update(receipts)
+          .set({ isDuplicate: true, duplicateOfId: originalId, updatedAt: new Date() })
+          .where(eq(receipts.id, receiptId));
+      }
+    });
+
+    // Step 5: Audit log
     await step.run('audit-log', async () => {
       await db.insert(auditLogs).values({
         userId,

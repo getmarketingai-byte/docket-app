@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 import { buttonVariants } from '@/components/ui/button';
 import { ReceiptEditForm } from '@/components/receipts/receipt-edit-form';
 import { VehicleAssignSelect } from '@/components/vehicles/vehicle-assign-select';
+import { DismissDuplicateButton } from '@/components/receipts/dismiss-duplicate-button';
 import { getCurrentUserProfileId, getReceiptById, getReceiptAuditLog, getVehiclesForUser } from '@/lib/db/queries';
 import { cn } from '@/lib/utils';
 
@@ -57,6 +58,22 @@ export default async function ReceiptDetailPage({ params }: PageProps) {
           )}
         </div>
       </div>
+
+      {/* Duplicate warning */}
+      {receipt.isDuplicate && (
+        <div className="rounded-lg bg-orange-50 border border-orange-200 p-4 flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-orange-800">⚠ Possible duplicate</p>
+            <p className="text-xs text-orange-700 mt-1">
+              This receipt looks like a duplicate of another one you uploaded.
+              {receipt.duplicateOfId && (
+                <> <Link href={`/dashboard/receipts/${receipt.duplicateOfId}`} className="underline hover:no-underline">View original</Link>.</>
+              )}
+            </p>
+          </div>
+          <DismissDuplicateButton receiptId={id} />
+        </div>
+      )}
 
       {/* Vehicle assignment (show only if user has vehicles) */}
       {userVehicles.length > 0 && (

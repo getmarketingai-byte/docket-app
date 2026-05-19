@@ -17,6 +17,7 @@ type Receipt = {
   taxClaimableConfidence?: string | null;
   status?: string;
   reimbursable?: boolean | null;
+  isDuplicate?: boolean | null;
   createdAt?: Date | string | null;
 };
 
@@ -158,6 +159,7 @@ export function ReceiptsTimeline({ groups }: Props) {
                     taxClaimableConfidence={r.taxClaimableConfidence}
                     status={r.status}
                     reimbursable={r.reimbursable}
+                    isDuplicate={r.isDuplicate}
                     createdAt={r.createdAt}
                     onRetry={r.status === 'processing' ? () => retryReceipt(r.id) : undefined}
                   />
@@ -175,6 +177,7 @@ export function ReceiptsTimeline({ groups }: Props) {
                     taxClaimableConfidence={r.taxClaimableConfidence}
                     status={r.status}
                     reimbursable={r.reimbursable}
+                    isDuplicate={r.isDuplicate}
                     createdAt={r.createdAt}
                     onRetry={r.status === 'processing' ? () => retryReceipt(r.id) : undefined}
                   />

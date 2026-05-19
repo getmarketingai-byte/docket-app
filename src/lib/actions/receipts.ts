@@ -161,3 +161,16 @@ export async function bulkMarkReimbursable(receiptIds: string[], reimbursable: b
   revalidatePath('/dashboard/receipts');
   revalidatePath('/dashboard/reimbursements');
 }
+
+export async function dismissDuplicateAction(receiptId: string) {
+  const profileId = await getProfileId();
+
+  await db
+    .update(receipts)
+    .set({ isDuplicate: false, duplicateOfId: null, updatedAt: new Date() })
+    .where(and(eq(receipts.id, receiptId), eq(receipts.userId, profileId)));
+
+  revalidatePath(`/dashboard/receipts/${receiptId}`);
+  revalidatePath('/dashboard/analytics');
+  revalidatePath('/dashboard/receipts');
+}

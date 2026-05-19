@@ -1,10 +1,18 @@
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SpendingChart } from '@/components/analytics/spending-chart';
 import { CategoryDonut } from '@/components/analytics/category-donut';
 import { MerchantList } from '@/components/analytics/merchant-list';
 import { TaxSummaryChart } from '@/components/analytics/tax-summary-chart';
-import { getCurrentUserProfileId, getAnalyticsData, getTaxSummary } from '@/lib/db/queries';
+import { RecurringExpenses } from '@/components/analytics/recurring-expenses';
+import {
+  getCurrentUserProfileId,
+  getAnalyticsData,
+  getTaxSummary,
+  getRecurringExpenses,
+  getDuplicateReceipts,
+} from '@/lib/db/queries';
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' }).format(n);
@@ -14,9 +22,11 @@ export default async function AnalyticsPage() {
   const profileId = await getCurrentUserProfileId();
   if (!profileId) redirect('/sign-in');
 
-  const [analytics, taxSummary] = await Promise.all([
+  const [analytics, taxSummary, recurring, duplicates] = await Promise.all([
     getAnalyticsData(profileId),
     getTaxSummary(profileId),
+    getRecurringExpenses(profileId),
+    getDuplicateReceipts(profileId),
   ]);
 
   const hasData = analytics.monthlySpend.some((m) => m.amount > 0);
@@ -187,6 +197,55 @@ export default async function AnalyticsPage() {
                   </div>
                 );
               })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Recurring expenses */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm font-medium">Recurring expenses</CardTitle>
+          <p className="text-xs text-muted-foreground">Merchants appearing in 3+ months over last 6 months</p>
+        </CardHeader>
+        <CardContent>
+          <RecurringExpenses data={recurring} />
+        </CardContent>
+      </Card>
+
+      {/* Duplicate receipts */}
+      {duplicates.length > 0 && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-sm font-medium">Possible duplicates</CardTitle>
+              <p className="text-xs text-muted-foreground">{duplicates.length} receipt{duplicates.length !== 1 ? 's' : ''} flagged as potential duplicates</p>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {duplicates.slice(0, 8).map((d) => (
+                <div key={d.id} className="flex items-center justify-between gap-3 py-2 border-b last:border-0 text-sm">
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{d.merchant ?? 'Unknown merchant'}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {d.receiptDate ? new Date(d.receiptDate).toLocaleDateString('en-AU') : '—'}
+                      {d.totalAmount && ` · $${parseFloat(d.totalAmount).toFixed(2)}`}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Link
+                      href={`/dashboard/receipts/${d.id}`}
+                      className="text-xs text-primary hover:underline"
+                    >
+                      Review →
+                    </Link>
+                  </div>
+                </div>
+              ))}
+              {duplicates.length > 8 && (
+                <p className="text-xs text-muted-foreground pt-1">+ {duplicates.length - 8} more — review receipts to dismiss false positives</p>
+              )}
             </div>
           </CardContent>
         </Card>

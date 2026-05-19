@@ -598,3 +598,109 @@ export async function getAnalyticsData(profileId: string) {
     taxCategoryBreakdown,
   };
 }
+
+// ─── Duplicate receipts ────────────────────────────────────────────────────────
+
+export async function getDuplicateReceipts(profileId: string) {
+  return db
+    .select({
+      id: receipts.id,
+      merchant: receipts.merchant,
+      totalAmount: receipts.totalAmount,
+      receiptDate: receipts.receiptDate,
+      category: receipts.category,
+      duplicateOfId: receipts.duplicateOfId,
+      createdAt: receipts.createdAt,
+    })
+    .from(receipts)
+    .where(and(eq(receipts.userId, profileId), eq(receipts.isDuplicate, true)))
+    .orderBy(desc(receipts.receiptDate));
+}
+
+export async function dismissDuplicate(profileId: string, receiptId: string) {
+  await db
+    .update(receipts)
+    .set({ isDuplicate: false, duplicateOfId: null, updatedAt: new Date() })
+    .where(and(eq(receipts.id, receiptId), eq(receipts.userId, profileId)));
+}
+
+// ─── Recurring expense analysis ────────────────────────────────────────────────
+
+export interface RecurringExpense {
+  merchant: string;
+  category: string | null;
+  monthlyAvg: number;
+  occurrences: number;
+  months: string[];
+  lastAmount: number;
+  lastDate: Date | null;
+}
+
+export async function getRecurringExpenses(profileId: string): Promise<RecurringExpense[]> {
+  const now = new Date();
+  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+
+  const rows = await db
+    .select({
+      id: receipts.id,
+      merchant: receipts.merchant,
+      totalAmount: receipts.totalAmount,
+      category: receipts.category,
+      receiptDate: receipts.receiptDate,
+    })
+    .from(receipts)
+    .where(
+      and(
+        eq(receipts.userId, profileId),
+        gte(receipts.receiptDate, sixMonthsAgo),
+        sql`${receipts.status} = 'complete'`,
+        sql`${receipts.merchant} IS NOT NULL`,
+      ),
+    );
+
+  // Group by merchant
+  const byMerchant: Record<
+    string,
+    { amounts: number[]; months: Set<string>; category: string | null; lastAmount: number; lastDate: Date | null }
+  > = {};
+
+  for (const r of rows) {
+    if (!r.merchant) continue;
+    const key = r.merchant.toLowerCase();
+    if (!byMerchant[key]) {
+      byMerchant[key] = { amounts: [], months: new Set(), category: r.category, lastAmount: 0, lastDate: null };
+    }
+    const d = r.receiptDate ? new Date(r.receiptDate) : null;
+    const monthKey = d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` : null;
+    if (monthKey) byMerchant[key].months.add(monthKey);
+    const amt = parseFloat(r.totalAmount ?? '0');
+    byMerchant[key].amounts.push(amt);
+    if (!byMerchant[key].lastDate || (d && d > byMerchant[key].lastDate!)) {
+      byMerchant[key].lastDate = d;
+      byMerchant[key].lastAmount = amt;
+    }
+    if (!byMerchant[key].category && r.category) {
+      byMerchant[key].category = r.category;
+    }
+  }
+
+  const recurring: RecurringExpense[] = [];
+  for (const [key, data] of Object.entries(byMerchant)) {
+    // Must appear in 3+ distinct months to be "recurring"
+    if (data.months.size < 3) continue;
+    const monthlyAvg = data.amounts.reduce((s, a) => s + a, 0) / data.months.size;
+    // Use the original merchant name (not lowercased key)
+    const original = rows.find((r) => r.merchant?.toLowerCase() === key)?.merchant ?? key;
+    recurring.push({
+      merchant: original,
+      category: data.category,
+      monthlyAvg,
+      occurrences: data.amounts.length,
+      months: Array.from(data.months).sort(),
+      lastAmount: data.lastAmount,
+      lastDate: data.lastDate,
+    });
+  }
+
+  return recurring.sort((a, b) => b.monthlyAvg - a.monthlyAvg).slice(0, 10);
+}

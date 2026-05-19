@@ -14,6 +14,7 @@ type ReceiptCardProps = {
   taxClaimableConfidence?: string | null;
   status?: string;
   reimbursable?: boolean | null;
+  isDuplicate?: boolean | null;
   createdAt?: string | Date | null;
   onRetry?: () => void;
 };
@@ -28,6 +29,7 @@ export function ReceiptCard({
   taxClaimableConfidence,
   status = 'complete',
   reimbursable,
+  isDuplicate,
   createdAt,
   onRetry,
 }: ReceiptCardProps) {
@@ -58,6 +60,9 @@ export function ReceiptCard({
         )}
         {reimbursable && (
           <Badge variant="outline" className="text-xs text-blue-600 border-blue-200">Reimbursable</Badge>
+        )}
+        {isDuplicate && (
+          <Badge variant="outline" className="text-xs text-orange-600 border-orange-200">⚠ Duplicate</Badge>
         )}
         {status === 'processing' && createdAt ? (
           <ProcessingElapsed createdAt={createdAt} onRetry={onRetry} />
