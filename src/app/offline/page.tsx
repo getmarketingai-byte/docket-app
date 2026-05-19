@@ -1,9 +1,6 @@
-import type { Metadata } from 'next';
-import { WifiOff } from 'lucide-react';
+'use client';
 
-export const metadata: Metadata = {
-  title: 'Offline',
-};
+import { WifiOff } from 'lucide-react';
 
 export default function OfflinePage() {
   return (
