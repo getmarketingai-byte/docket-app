@@ -202,9 +202,9 @@ export function BudgetSettingsClient({
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={insights.monthlyTrend} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
                 <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${v}`} width={50} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `$${v}`} width={50} />
                 <Tooltip
-                  formatter={(v) => fmt(Number(v))}
+                  formatter={(v) => fmt(Number(v ?? 0))}
                   labelStyle={{ fontSize: 12 }}
                   contentStyle={{ fontSize: 12 }}
                 />

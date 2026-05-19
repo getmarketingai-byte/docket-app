@@ -43,11 +43,16 @@ export const processReceipt = inngest.createFunction(
     triggers: [{ event: 'receipt/uploaded' }],
     timeouts: { finish: '5m' },
     onFailure: async ({ error, event: failEvent }) => {
-      const receiptId = (failEvent.data as { receiptId?: string })?.receiptId;
+      // In onFailure, failEvent is the inngest/function.failed system event.
+      // The original event is nested at failEvent.data.event.data.
+      const originalData = (failEvent.data as { event?: { data?: { receiptId?: string } } })?.event?.data;
+      const receiptId = originalData?.receiptId;
       if (!receiptId) return;
-      const isTimeout = error?.message?.toLowerCase().includes('timeout') ||
+      const isTimeout =
+        error?.message?.toLowerCase().includes('timeout') ||
         error?.name === 'InngestFunctionTimeoutError';
-      await db.update(receipts)
+      await db
+        .update(receipts)
         .set({
           status: 'error',
           aiExtractionRaw: { error: isTimeout ? 'Processing timed out' : 'Processing failed' },
@@ -127,9 +132,13 @@ export const processReceipt = inngest.createFunction(
 
     // Step 3: Store results (skip if user already manually entered data)
     await step.run('store-results', async () => {
-      const [current] = await db.select({ status: receipts.status }).from(receipts).where(eq(receipts.id, receiptId));
+      const [current] = await db
+        .select({ status: receipts.status })
+        .from(receipts)
+        .where(eq(receipts.id, receiptId));
       if (current?.status === 'complete') return; // manual entry took precedence
 
+      const d = extraction;
       await db.update(receipts)
         .set({
           status: 'complete',
@@ -147,7 +156,8 @@ export const processReceipt = inngest.createFunction(
           category: d.category as string | null,
           subcategory: d.subcategory as string | null,
           taxClaimable: d.tax_claimable as boolean | null,
-          taxClaimableConfidence: d.tax_claimable_confidence != null ? String(d.tax_claimable_confidence) : null,
+          taxClaimableConfidence:
+            d.tax_claimable_confidence != null ? String(d.tax_claimable_confidence) : null,
           taxClaimableReasoning: d.tax_claimable_reasoning as string | null,
           taxCategory: d.tax_category as string | null,
           odometerReading: d.odometer_reading as number | null,
