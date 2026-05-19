@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { buttonVariants } from '@/components/ui/button';
 import { ReceiptEditForm } from '@/components/receipts/receipt-edit-form';
-import { getCurrentUserProfileId, getReceiptById, getReceiptAuditLog } from '@/lib/db/queries';
+import { VehicleAssignSelect } from '@/components/vehicles/vehicle-assign-select';
+import { getCurrentUserProfileId, getReceiptById, getReceiptAuditLog, getVehiclesForUser } from '@/lib/db/queries';
 import { cn } from '@/lib/utils';
 
 type PageProps = {
@@ -14,10 +15,12 @@ export default async function ReceiptDetailPage({ params }: PageProps) {
   const profileId = await getCurrentUserProfileId();
   if (!profileId) redirect('/sign-in');
 
-  const receipt = await getReceiptById(profileId, id);
+  const [receipt, auditLog, userVehicles] = await Promise.all([
+    getReceiptById(profileId, id),
+    getReceiptAuditLog(id),
+    getVehiclesForUser(profileId),
+  ]);
   if (!receipt) notFound();
-
-  const auditLog = await getReceiptAuditLog(id);
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -28,7 +31,7 @@ export default async function ReceiptDetailPage({ params }: PageProps) {
             href="/dashboard/receipts"
             className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), '-ml-2 mb-1')}
           >
-            ← Back to receipts
+            &larr; Back to receipts
           </Link>
           <h1 className="text-xl font-bold mt-1">
             {receipt.merchant ?? 'Receipt'}
@@ -43,7 +46,7 @@ export default async function ReceiptDetailPage({ params }: PageProps) {
         </div>
         <div className="text-right flex-shrink-0">
           <p className="text-2xl font-bold">
-            {receipt.totalAmount ? `$${parseFloat(receipt.totalAmount).toFixed(2)}` : '—'}
+            {receipt.totalAmount ? `$${parseFloat(receipt.totalAmount).toFixed(2)}` : '\u2014'}
           </p>
           {receipt.gstAmount && parseFloat(receipt.gstAmount) > 0 && (
             <p className="text-xs text-muted-foreground">
@@ -52,6 +55,15 @@ export default async function ReceiptDetailPage({ params }: PageProps) {
           )}
         </div>
       </div>
+
+      {/* Vehicle assignment (show only if user has vehicles) */}
+      {userVehicles.length > 0 && (
+        <VehicleAssignSelect
+          receiptId={id}
+          vehicleId={receipt.vehicleId ?? null}
+          vehicles={userVehicles}
+        />
+      )}
 
       <ReceiptEditForm receipt={receipt} auditLog={auditLog} />
     </div>

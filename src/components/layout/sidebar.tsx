@@ -13,6 +13,7 @@ import {
   FileText,
   Menu,
   X,
+  Car,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -20,6 +21,7 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/dashboard/receipts', label: 'Receipts', icon: Receipt },
+  { href: '/dashboard/vehicles', label: 'Vehicles', icon: Car },
   { href: '/dashboard/upload', label: 'Upload', icon: Upload },
   { href: '/dashboard/search', label: 'Search', icon: Search },
   { href: '/dashboard/exports', label: 'Exports', icon: Download },

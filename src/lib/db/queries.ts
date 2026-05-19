@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { db } from '@/lib/db';
-import { receipts, userProfiles, auditLogs } from '@/lib/db/schema';
+import { receipts, userProfiles, auditLogs, vehicles, vehicleFuelLogs } from '@/lib/db/schema';
 import { eq, desc, and, ilike, gte, lte, or, sql } from 'drizzle-orm';
 
 export type ReceiptFilters = {
@@ -170,4 +170,67 @@ export async function getDashboardStats(profileId: string) {
     .reduce((sum, r) => sum + parseFloat(r.totalAmount ?? '0'), 0);
 
   return { total, totalSpend, totalGst, pendingReview, claimableAmount };
+}
+
+// ─── Vehicle queries ───────────────────────────────────────────────────────────
+
+export async function getVehiclesForUser(userId: string) {
+  return db.select().from(vehicles).where(eq(vehicles.userId, userId)).orderBy(vehicles.name);
+}
+
+export async function getVehicleById(userId: string, vehicleId: string) {
+  const rows = await db.select().from(vehicles)
+    .where(and(eq(vehicles.id, vehicleId), eq(vehicles.userId, userId))).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function getVehicleWithStats(userId: string, vehicleId: string) {
+  const vehicle = await getVehicleById(userId, vehicleId);
+  if (!vehicle) return null;
+
+  // All receipts assigned to this vehicle
+  const vehicleReceipts = await db.select().from(receipts)
+    .where(and(eq(receipts.userId, userId), eq(receipts.vehicleId, vehicleId)))
+    .orderBy(desc(receipts.receiptDate));
+
+  // Fuel logs for this vehicle
+  const fuelLogs = await db.select().from(vehicleFuelLogs)
+    .where(eq(vehicleFuelLogs.vehicleId, vehicleId))
+    .orderBy(desc(vehicleFuelLogs.loggedAt));
+
+  // Calculate analytics
+  const totalCost = vehicleReceipts.reduce((sum, r) => sum + parseFloat(r.totalAmount ?? '0'), 0);
+
+  // Cost by category
+  const costByCategory: Record<string, number> = {};
+  for (const r of vehicleReceipts) {
+    const cat = r.category ?? 'other';
+    costByCategory[cat] = (costByCategory[cat] ?? 0) + parseFloat(r.totalAmount ?? '0');
+  }
+
+  // Fuel economy: find consecutive odometer readings
+  const fuelLogsWithOdometer = fuelLogs.filter(l => l.odometerReading && l.litres);
+  let fuelEconomy: number | null = null;
+  let costPerKm: number | null = null;
+
+  if (fuelLogsWithOdometer.length >= 2) {
+    // Sort ascending by odometer
+    const sorted = [...fuelLogsWithOdometer].sort((a, b) => (a.odometerReading ?? 0) - (b.odometerReading ?? 0));
+    const first = sorted[0];
+    const last = sorted[sorted.length - 1];
+    const distanceKm = (last.odometerReading ?? 0) - (first.odometerReading ?? 0);
+    if (distanceKm > 0) {
+      // Total litres from second fill onwards (exclude first which establishes baseline)
+      const totalLitres = sorted.slice(1).reduce((sum, l) => sum + parseFloat(l.litres ?? '0'), 0);
+      if (totalLitres > 0) {
+        fuelEconomy = (totalLitres / distanceKm) * 100; // L/100km
+      }
+      const fuelTotalCost = sorted.slice(1).reduce((sum, l) => sum + parseFloat(l.totalCost ?? '0'), 0);
+      if (fuelTotalCost > 0) {
+        costPerKm = fuelTotalCost / distanceKm;
+      }
+    }
+  }
+
+  return { vehicle, vehicleReceipts, fuelLogs, totalCost, costByCategory, fuelEconomy, costPerKm };
 }

@@ -31,6 +31,27 @@ export const userProfiles = pgTable(
   }),
 );
 
+// ─── vehicles ─────────────────────────────────────────────────────────────────
+export const vehicles = pgTable(
+  'vehicles',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull().references(() => userProfiles.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(), // nickname e.g. "Work Ute"
+    make: text('make'),
+    model: text('model'),
+    year: integer('year'),
+    rego: text('rego'), // registration plate
+    fuelType: text('fuel_type').default('petrol'), // petrol | diesel | electric | hybrid
+    businessUsePercent: integer('business_use_percent').default(0),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    userVehicleIdx: index('vehicles_user_idx').on(t.userId),
+  }),
+);
+
 // ─── receipts ─────────────────────────────────────────────────────────────────
 
 export const receipts = pgTable(
@@ -86,6 +107,7 @@ export const receipts = pgTable(
     notes: text('notes'),
     isDuplicate: boolean('is_duplicate').default(false),
     source: text('source').default('upload'),
+    vehicleId: uuid('vehicle_id').references(() => vehicles.id, { onDelete: 'set null' }),
 
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
@@ -112,3 +134,23 @@ export const auditLogs = pgTable('audit_logs', {
   newValue: text('new_value'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
+
+// ─── vehicle_fuel_logs ────────────────────────────────────────────────────────
+export const vehicleFuelLogs = pgTable(
+  'vehicle_fuel_logs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    vehicleId: uuid('vehicle_id').notNull().references(() => vehicles.id, { onDelete: 'cascade' }),
+    receiptId: uuid('receipt_id').references(() => receipts.id, { onDelete: 'set null' }),
+    litres: decimal('litres', { precision: 8, scale: 3 }),
+    odometerReading: integer('odometer_reading'),
+    fuelType: text('fuel_type'),
+    costPerLitre: decimal('cost_per_litre', { precision: 8, scale: 3 }),
+    totalCost: decimal('total_cost', { precision: 10, scale: 2 }),
+    loggedAt: timestamp('logged_at').defaultNow().notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    vehicleFuelLogIdx: index('vehicle_fuel_logs_vehicle_idx').on(t.vehicleId),
+  }),
+);
