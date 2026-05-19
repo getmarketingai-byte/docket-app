@@ -14,6 +14,11 @@ export async function POST(req: NextRequest) {
   const file = formData.get('file') as File;
   if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 });
 
+  const MAX_SIZE = 20 * 1024 * 1024; // 20MB
+  if (file.size > MAX_SIZE) {
+    return NextResponse.json({ error: 'File too large. Maximum size is 20MB.' }, { status: 413 });
+  }
+
   const ex = await db
     .select()
     .from(userProfiles)
