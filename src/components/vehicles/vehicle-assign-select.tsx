@@ -14,7 +14,7 @@ type Props = {
 export function VehicleAssignSelect({ receiptId, vehicleId, vehicles }: Props) {
   const [isPending, startTransition] = useTransition();
 
-  const handleChange = (value: string) => {
+  const handleChange = (value: string | null) => {
     startTransition(async () => {
       await assignReceiptToVehicle(receiptId, value === 'none' ? null : value);
     });
