@@ -37,7 +37,25 @@ Return ONLY valid JSON (no markdown, no explanation) with this exact structure:
 Australian tax context: GST is 10%. Tax invoices must show supplier ABN. Work-related expenses are deductible if incurred earning income. AI estimate — review with your accountant.`;
 
 export const processReceipt = inngest.createFunction(
-  { id: 'process-receipt', name: 'Process Receipt', triggers: [{ event: 'receipt/uploaded' }] },
+  {
+    id: 'process-receipt',
+    name: 'Process Receipt',
+    triggers: [{ event: 'receipt/uploaded' }],
+    timeouts: { finish: '5m' },
+    onFailure: async ({ error, event: failEvent }) => {
+      const receiptId = (failEvent.data as { receiptId?: string })?.receiptId;
+      if (!receiptId) return;
+      const isTimeout = error?.message?.toLowerCase().includes('timeout') ||
+        error?.name === 'InngestFunctionTimeoutError';
+      await db.update(receipts)
+        .set({
+          status: 'error',
+          aiExtractionRaw: { error: isTimeout ? 'Processing timed out' : 'Processing failed' },
+          updatedAt: new Date(),
+        })
+        .where(eq(receipts.id, receiptId));
+    },
+  },
   async ({ event, step }) => {
     const { receiptId, blobUrl, userId } = event.data as {
       receiptId: string;
@@ -107,8 +125,11 @@ export const processReceipt = inngest.createFunction(
       }
     });
 
-    // Step 3: Store results
+    // Step 3: Store results (skip if user already manually entered data)
     await step.run('store-results', async () => {
+      const [current] = await db.select({ status: receipts.status }).from(receipts).where(eq(receipts.id, receiptId));
+      if (current?.status === 'complete') return; // manual entry took precedence
+
       const d = extraction;
       await db.update(receipts)
         .set({

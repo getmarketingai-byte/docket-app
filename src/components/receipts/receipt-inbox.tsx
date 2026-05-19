@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Loader2, RefreshCw, AlertCircle, CheckCircle, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ProcessingElapsed } from './processing-elapsed';
 
 type Receipt = {
   id: string;
@@ -97,10 +98,14 @@ export function ReceiptInbox({ refreshTrigger }: Props) {
               {r.totalAmount && (
                 <span className="text-sm font-semibold">${parseFloat(r.totalAmount).toFixed(2)}</span>
               )}
-              <Badge variant={cfg.variant} className="gap-1 text-xs">
-                {cfg.icon}
-                {cfg.label}
-              </Badge>
+              {r.status === 'processing' ? (
+                <ProcessingElapsed createdAt={r.createdAt} onRetry={() => retryReceipt(r.id)} />
+              ) : (
+                <Badge variant={cfg.variant} className="gap-1 text-xs">
+                  {cfg.icon}
+                  {cfg.label}
+                </Badge>
+              )}
               {r.status === 'error' && (
                 <Button variant="ghost" size="sm" onClick={() => retryReceipt(r.id)} className="h-7 text-xs">
                   <RefreshCw className="h-3 w-3 mr-1" />

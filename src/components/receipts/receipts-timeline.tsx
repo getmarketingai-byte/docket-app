@@ -17,6 +17,7 @@ type Receipt = {
   taxClaimableConfidence?: string | null;
   status?: string;
   reimbursable?: boolean | null;
+  createdAt?: Date | string | null;
 };
 
 type Group = { label: string; items: Receipt[] };
@@ -153,6 +154,7 @@ export function ReceiptsTimeline({ groups }: Props) {
                     taxClaimableConfidence={r.taxClaimableConfidence}
                     status={r.status}
                     reimbursable={r.reimbursable}
+                    createdAt={r.createdAt}
                   />
                 </div>
               ) : (
@@ -168,6 +170,7 @@ export function ReceiptsTimeline({ groups }: Props) {
                     taxClaimableConfidence={r.taxClaimableConfidence}
                     status={r.status}
                     reimbursable={r.reimbursable}
+                    createdAt={r.createdAt}
                   />
                 </Link>
               ),

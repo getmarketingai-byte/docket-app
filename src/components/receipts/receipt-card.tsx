@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ClaimabilityDot } from './claimability-dot';
+import { ProcessingElapsed } from './processing-elapsed';
 
 type ReceiptCardProps = {
   id: string;
@@ -13,6 +14,7 @@ type ReceiptCardProps = {
   taxClaimableConfidence?: string | null;
   status?: string;
   reimbursable?: boolean | null;
+  createdAt?: string | Date | null;
 };
 
 export function ReceiptCard({
@@ -25,6 +27,7 @@ export function ReceiptCard({
   taxClaimableConfidence,
   status = 'complete',
   reimbursable,
+  createdAt,
 }: ReceiptCardProps) {
   return (
     <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
@@ -54,7 +57,9 @@ export function ReceiptCard({
         {reimbursable && (
           <Badge variant="outline" className="text-xs text-blue-600 border-blue-200">Reimbursable</Badge>
         )}
-        {status !== 'complete' && (
+        {status === 'processing' && createdAt ? (
+          <ProcessingElapsed createdAt={createdAt} />
+        ) : status !== 'complete' && (
           <Badge variant="outline" className="capitalize text-xs">{status}</Badge>
         )}
       </CardContent>
