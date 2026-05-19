@@ -30,21 +30,35 @@ export async function POST(req: NextRequest) {
     up = ins[0];
   }
 
-  const blob = await put(
-    `receipts/${up.id}/${Date.now()}-${file.name}`,
-    file,
-    { access: 'public' },
-  );
+  let blob: Awaited<ReturnType<typeof put>>;
+  try {
+    blob = await put(
+      `receipts/${up.id}/${Date.now()}-${file.name}`,
+      file,
+      { access: 'public' },
+    );
+  } catch {
+    return NextResponse.json({ error: 'File storage failed' }, { status: 502 });
+  }
 
-  const rec = await db
-    .insert(receipts)
-    .values({ userId: up.id, status: 'processing', originalBlobUrl: blob.url, source: 'upload' })
-    .returning();
+  let rec: (typeof receipts.$inferSelect)[];
+  try {
+    rec = await db
+      .insert(receipts)
+      .values({ userId: up.id, status: 'processing', originalBlobUrl: blob.url, source: 'upload' })
+      .returning();
+  } catch {
+    return NextResponse.json({ error: 'Failed to create receipt record' }, { status: 500 });
+  }
 
-  await inngest.send({
-    name: 'receipt/uploaded',
-    data: { receiptId: rec[0].id, blobUrl: blob.url, userId: up.id },
-  });
+  try {
+    await inngest.send({
+      name: 'receipt/uploaded',
+      data: { receiptId: rec[0].id, blobUrl: blob.url, userId: up.id },
+    });
+  } catch {
+    // Inngest failure is non-fatal — receipt record exists, can be retried
+  }
 
   return NextResponse.json({ receiptId: rec[0].id, status: 'processing' });
 }

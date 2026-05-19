@@ -51,10 +51,14 @@ export async function POST(req: Request) {
     const { id, first_name, last_name } = event.data;
     const displayName = [first_name, last_name].filter(Boolean).join(' ') || null;
 
-    await db.insert(userProfiles).values({
-      clerkUserId: id,
-      displayName,
-    });
+    try {
+      await db.insert(userProfiles).values({
+        clerkUserId: id,
+        displayName,
+      }).onConflictDoNothing();
+    } catch {
+      return NextResponse.json({ error: 'Failed to create user profile' }, { status: 500 });
+    }
   }
 
   return NextResponse.json({ received: true });
