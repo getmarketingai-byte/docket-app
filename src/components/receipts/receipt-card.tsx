@@ -15,6 +15,7 @@ type ReceiptCardProps = {
   status?: string;
   reimbursable?: boolean | null;
   createdAt?: string | Date | null;
+  onRetry?: () => void;
 };
 
 export function ReceiptCard({
@@ -28,6 +29,7 @@ export function ReceiptCard({
   status = 'complete',
   reimbursable,
   createdAt,
+  onRetry,
 }: ReceiptCardProps) {
   return (
     <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
@@ -58,7 +60,7 @@ export function ReceiptCard({
           <Badge variant="outline" className="text-xs text-blue-600 border-blue-200">Reimbursable</Badge>
         )}
         {status === 'processing' && createdAt ? (
-          <ProcessingElapsed createdAt={createdAt} />
+          <ProcessingElapsed createdAt={createdAt} onRetry={onRetry} />
         ) : status !== 'complete' && (
           <Badge variant="outline" className="capitalize text-xs">{status}</Badge>
         )}

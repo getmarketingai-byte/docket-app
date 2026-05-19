@@ -84,6 +84,7 @@ export function ReceiptEditForm({ receipt, auditLog, status }: Props) {
   const isProcessing = status === 'processing';
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const [isPending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
   const [isReimbursable, setIsReimbursable] = useState(receipt.reimbursable ?? false);
@@ -127,11 +128,23 @@ export function ReceiptEditForm({ receipt, auditLog, status }: Props) {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          <div>
+          <div className="flex-1">
             <p className="text-sm font-medium text-blue-800">AI is processing your receipt</p>
             <p className="text-xs text-blue-600 mt-0.5">
               You can enter details now — saving will complete the receipt immediately.
             </p>
+            <button
+              type="button"
+              disabled={retrying}
+              onClick={() => {
+                setRetrying(true);
+                fetch(`/api/receipts/${receipt.id}/retry`, { method: 'POST' })
+                  .finally(() => setRetrying(false));
+              }}
+              className="mt-2 text-xs text-blue-700 underline underline-offset-2 hover:text-blue-900 disabled:opacity-50"
+            >
+              {retrying ? 'Retrying…' : 'Retry processing'}
+            </button>
           </div>
         </div>
       )}

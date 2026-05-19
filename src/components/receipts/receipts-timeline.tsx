@@ -32,6 +32,10 @@ export function ReceiptsTimeline({ groups }: Props) {
   const [isPending, startTransition] = useTransition();
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
+  const retryReceipt = (id: string) => {
+    fetch(`/api/receipts/${id}/retry`, { method: 'POST' }).catch(() => null);
+  };
+
   const allIds = groups.flatMap((g) => g.items.map((r) => r.id));
 
   const toggleSelect = (id: string) => {
@@ -155,6 +159,7 @@ export function ReceiptsTimeline({ groups }: Props) {
                     status={r.status}
                     reimbursable={r.reimbursable}
                     createdAt={r.createdAt}
+                    onRetry={r.status === 'processing' ? () => retryReceipt(r.id) : undefined}
                   />
                 </div>
               ) : (
@@ -171,6 +176,7 @@ export function ReceiptsTimeline({ groups }: Props) {
                     status={r.status}
                     reimbursable={r.reimbursable}
                     createdAt={r.createdAt}
+                    onRetry={r.status === 'processing' ? () => retryReceipt(r.id) : undefined}
                   />
                 </Link>
               ),
