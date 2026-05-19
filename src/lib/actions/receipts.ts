@@ -98,14 +98,10 @@ export async function updateReceipt(receiptId: string, formData: FormData) {
     auditEntries.push({ field: 'reimbursementReceivedAt', newValue: reimbReceivedVal as string });
   }
 
-  // Manual entry: mark receipt as complete with source=manual
-  const statusVal = formData.get('_status');
-  if (statusVal) {
-    fields['status'] = statusVal as string;
-  }
-  const sourceVal = formData.get('_source');
-  if (sourceVal) {
-    fields['source'] = sourceVal as string;
+  const isManualEntry = formData.get('manualEntry') === 'true';
+  if (isManualEntry) {
+    (fields as Record<string, unknown>)['status'] = 'complete';
+    (fields as Record<string, unknown>)['source'] = 'manual';
   }
 
   if (Object.keys(fields).length === 0) return;
@@ -116,6 +112,14 @@ export async function updateReceipt(receiptId: string, formData: FormData) {
     .where(eq(receipts.id, receiptId));
 
   // Audit log entries
+  if (isManualEntry) {
+    await db.insert(auditLogs).values({
+      userId: profileId,
+      receiptId,
+      action: 'manual_entry',
+      newValue: 'User entered receipt details manually',
+    });
+  }
   for (const entry of auditEntries) {
     await db.insert(auditLogs).values({
       userId: profileId,

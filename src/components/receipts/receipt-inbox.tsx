@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
 import { Loader2, RefreshCw, AlertCircle, CheckCircle, Clock } from 'lucide-react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
@@ -100,7 +101,15 @@ export function ReceiptInbox({ refreshTrigger }: Props) {
                 <span className="text-sm font-semibold">${parseFloat(r.totalAmount).toFixed(2)}</span>
               )}
               {r.status === 'processing' ? (
-                <ProcessingElapsed createdAt={r.createdAt} onRetry={() => retryReceipt(r.id)} />
+                <>
+                  <ProcessingElapsed createdAt={r.createdAt} onRetry={() => retryReceipt(r.id)} />
+                  <Link
+                    href={`/dashboard/receipts/${r.id}`}
+                    className="text-xs text-blue-600 hover:underline whitespace-nowrap"
+                  >
+                    Enter manually
+                  </Link>
+                </>
               ) : (
                 <Badge variant={cfg.variant} className="gap-1 text-xs">
                   {cfg.icon}

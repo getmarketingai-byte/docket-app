@@ -39,7 +39,6 @@ const REIMBURSEMENT_STATUSES = [
 
 type Receipt = {
   id: string;
-  status?: string | null;
   merchant?: string | null;
   merchantAbn?: string | null;
   receiptDate?: Date | null;
@@ -79,9 +78,10 @@ type AuditEntry = {
   createdAt: Date;
 };
 
-type Props = { receipt: Receipt; auditLog: AuditEntry[] };
+type Props = { receipt: Receipt; auditLog: AuditEntry[]; status?: string };
 
-export function ReceiptEditForm({ receipt, auditLog }: Props) {
+export function ReceiptEditForm({ receipt, auditLog, status }: Props) {
+  const isProcessing = status === 'processing';
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -118,11 +118,25 @@ export function ReceiptEditForm({ receipt, auditLog }: Props) {
     ? new Date(receipt.reimbursementReceivedAt).toISOString().slice(0, 10)
     : '';
 
-  const isProcessing = receipt.status === 'processing' || receipt.status === 'uploading';
-
   return (
     <div className="space-y-8">
-      {/* Receipt image — shown regardless of status */}
+      {/* Processing banner */}
+      {isProcessing && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 flex items-start gap-3">
+          <svg className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          <div>
+            <p className="text-sm font-medium text-blue-800">AI is processing your receipt</p>
+            <p className="text-xs text-blue-600 mt-0.5">
+              You can enter details now — saving will complete the receipt immediately.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Receipt image */}
       {(receipt.compressedBlobUrl || receipt.originalBlobUrl) && (
         <div className="rounded-lg overflow-hidden border bg-muted">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -134,17 +148,7 @@ export function ReceiptEditForm({ receipt, auditLog }: Props) {
         </div>
       )}
 
-      {/* Processing banner */}
-      {isProcessing && (
-        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
-          <p className="font-medium">AI is processing this receipt</p>
-          <p className="mt-0.5 text-xs opacity-80">
-            You can enter details manually below — your data will be saved and the AI result discarded.
-          </p>
-        </div>
-      )}
-
-      {/* Tax claimability — only shown after processing */}
+      {/* Tax claimability — only shown once AI processing is complete */}
       {!isProcessing && (
         <div className="rounded-lg border p-4 bg-muted/30 space-y-1">
           <div className="flex items-center justify-between">
@@ -164,13 +168,7 @@ export function ReceiptEditForm({ receipt, auditLog }: Props) {
       )}
 
       <form ref={formRef} action={handleSave} className="space-y-6">
-        {/* Hidden fields for manual entry */}
-        {isProcessing && (
-          <>
-            <input type="hidden" name="_status" value="complete" />
-            <input type="hidden" name="_source" value="manual" />
-          </>
-        )}
+        {isProcessing && <input type="hidden" name="manualEntry" value="true" />}
         {/* Core fields */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
@@ -362,7 +360,7 @@ export function ReceiptEditForm({ receipt, auditLog }: Props) {
             {isPending ? 'Deleting…' : 'Delete receipt'}
           </Button>
           <Button type="submit" disabled={saving}>
-            {saving ? 'Saving…' : saved ? '✓ Saved' : isProcessing ? 'Save manually' : 'Save changes'}
+            {saving ? 'Saving…' : saved ? '✓ Saved' : isProcessing ? 'Save as manual entry' : 'Save changes'}
           </Button>
         </div>
       </form>

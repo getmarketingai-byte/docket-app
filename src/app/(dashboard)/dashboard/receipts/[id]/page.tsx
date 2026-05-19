@@ -22,8 +22,10 @@ export default async function ReceiptDetailPage({ params }: PageProps) {
   ]);
   if (!receipt) notFound();
 
+  const isProcessing = receipt.status === 'processing';
+
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className={cn('mx-auto space-y-6', isProcessing ? 'max-w-4xl' : 'max-w-2xl')}>
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -34,7 +36,7 @@ export default async function ReceiptDetailPage({ params }: PageProps) {
             &larr; Back to receipts
           </Link>
           <h1 className="text-xl font-bold mt-1">
-            {receipt.merchant ?? 'Receipt'}
+            {receipt.merchant ?? (isProcessing ? 'Processing receipt…' : 'Receipt')}
           </h1>
           {receipt.receiptDate && (
             <p className="text-sm text-muted-foreground">
@@ -65,7 +67,7 @@ export default async function ReceiptDetailPage({ params }: PageProps) {
         />
       )}
 
-      <ReceiptEditForm receipt={receipt} auditLog={auditLog} />
+      <ReceiptEditForm receipt={receipt} auditLog={auditLog} status={receipt.status} />
     </div>
   );
 }
