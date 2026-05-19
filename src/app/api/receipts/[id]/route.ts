@@ -59,6 +59,8 @@ export async function PATCH(
     'subtotalAmount', 'category', 'subcategory', 'notes', 'paymentMethod',
     'receiptType', 'taxClaimable', 'taxCategory', 'businessPercentage',
     'fuelType', 'fuelLitres', 'odometerReading',
+    'reimbursable', 'reimbursementStatus', 'reimbursementSource',
+    'reimbursementAmount', 'reimbursementSubmittedAt', 'reimbursementReceivedAt',
   ];
 
   const updates: Record<string, unknown> = { updatedAt: new Date() };

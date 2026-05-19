@@ -103,6 +103,15 @@ export const receipts = pgTable(
     fuelLitres: decimal('fuel_litres', { precision: 8, scale: 3 }),
     fuelType: text('fuel_type'),
 
+    // Reimbursement
+    reimbursable: boolean('reimbursable').default(false),
+    reimbursementStatus: text('reimbursement_status'),
+    // pending | submitted | reimbursed | declined
+    reimbursementSource: text('reimbursement_source'),
+    reimbursementSubmittedAt: timestamp('reimbursement_submitted_at'),
+    reimbursementReceivedAt: timestamp('reimbursement_received_at'),
+    reimbursementAmount: decimal('reimbursement_amount', { precision: 10, scale: 2 }),
+
     // Meta
     notes: text('notes'),
     isDuplicate: boolean('is_duplicate').default(false),
@@ -117,6 +126,25 @@ export const receipts = pgTable(
     userMerchantIdx: index('receipts_user_merchant_idx').on(t.userId, t.merchant),
     userCategoryIdx: index('receipts_user_category_idx').on(t.userId, t.category),
     userStatusIdx: index('receipts_user_status_idx').on(t.userId, t.status),
+  }),
+);
+
+// ─── budgets ──────────────────────────────────────────────────────────────────
+
+export const budgets = pgTable(
+  'budgets',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => userProfiles.id, { onDelete: 'cascade' }),
+    category: text('category').notNull(), // 'overall' or a category name
+    monthlyLimit: decimal('monthly_limit', { precision: 10, scale: 2 }).notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    userCategoryIdx: uniqueIndex('budgets_user_category_idx').on(t.userId, t.category),
   }),
 );
 

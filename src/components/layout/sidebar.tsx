@@ -14,6 +14,8 @@ import {
   Menu,
   X,
   Car,
+  PieChart,
+  CreditCard,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -22,6 +24,8 @@ const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/dashboard/receipts', label: 'Receipts', icon: Receipt },
   { href: '/dashboard/vehicles', label: 'Vehicles', icon: Car },
+  { href: '/dashboard/reimbursements', label: 'Reimbursements', icon: CreditCard },
+  { href: '/dashboard/budgets', label: 'Budgets', icon: PieChart },
   { href: '/dashboard/upload', label: 'Upload', icon: Upload },
   { href: '/dashboard/search', label: 'Search', icon: Search },
   { href: '/dashboard/exports', label: 'Exports', icon: Download },

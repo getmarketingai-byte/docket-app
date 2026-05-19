@@ -3,7 +3,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { db } from '@/lib/db';
 import { receipts, userProfiles, auditLogs } from '@/lib/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 
@@ -40,7 +40,7 @@ export async function updateReceipt(receiptId: string, formData: FormData) {
   const stringFields = [
     'merchant', 'merchantAbn', 'category', 'subcategory',
     'paymentMethod', 'receiptType', 'notes', 'taxCategory',
-    'fuelType',
+    'fuelType', 'reimbursementStatus', 'reimbursementSource',
   ] as const;
 
   for (const f of stringFields) {
@@ -51,7 +51,7 @@ export async function updateReceipt(receiptId: string, formData: FormData) {
     }
   }
 
-  const numFields = ['totalAmount', 'gstAmount', 'subtotalAmount', 'fuelLitres'] as const;
+  const numFields = ['totalAmount', 'gstAmount', 'subtotalAmount', 'fuelLitres', 'reimbursementAmount'] as const;
   for (const f of numFields) {
     const val = formData.get(f);
     if (val !== null) {
@@ -76,6 +76,26 @@ export async function updateReceipt(receiptId: string, formData: FormData) {
   if (claimableVal !== null) {
     fields['taxClaimable'] = claimableVal === 'true' ? true : claimableVal === 'false' ? false : null;
     auditEntries.push({ field: 'taxClaimable', newValue: claimableVal as string });
+  }
+
+  const reimbursableVal = formData.get('reimbursable');
+  if (reimbursableVal !== null) {
+    fields['reimbursable'] = reimbursableVal === 'true';
+    auditEntries.push({ field: 'reimbursable', newValue: reimbursableVal as string });
+  }
+
+  const reimbSubmittedVal = formData.get('reimbursementSubmittedAt');
+  if (reimbSubmittedVal !== null) {
+    (fields as Record<string, unknown>)['reimbursementSubmittedAt'] =
+      reimbSubmittedVal === '' ? null : new Date(reimbSubmittedVal as string);
+    auditEntries.push({ field: 'reimbursementSubmittedAt', newValue: reimbSubmittedVal as string });
+  }
+
+  const reimbReceivedVal = formData.get('reimbursementReceivedAt');
+  if (reimbReceivedVal !== null) {
+    (fields as Record<string, unknown>)['reimbursementReceivedAt'] =
+      reimbReceivedVal === '' ? null : new Date(reimbReceivedVal as string);
+    auditEntries.push({ field: 'reimbursementReceivedAt', newValue: reimbReceivedVal as string });
   }
 
   if (Object.keys(fields).length === 0) return;
@@ -109,4 +129,21 @@ export async function deleteReceipt(receiptId: string) {
 
   revalidatePath('/dashboard/receipts');
   redirect('/dashboard/receipts');
+}
+
+export async function bulkMarkReimbursable(receiptIds: string[], reimbursable: boolean) {
+  if (receiptIds.length === 0) return;
+  const profileId = await getProfileId();
+
+  await db
+    .update(receipts)
+    .set({
+      reimbursable,
+      reimbursementStatus: reimbursable ? 'pending' : null,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(receipts.userId, profileId), inArray(receipts.id, receiptIds)));
+
+  revalidatePath('/dashboard/receipts');
+  revalidatePath('/dashboard/reimbursements');
 }

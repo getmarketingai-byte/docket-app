@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ClaimabilityDot } from './claimability-dot';
@@ -13,10 +12,10 @@ type ReceiptCardProps = {
   taxClaimable?: boolean | null;
   taxClaimableConfidence?: string | null;
   status?: string;
+  reimbursable?: boolean | null;
 };
 
 export function ReceiptCard({
-  id,
   merchant,
   totalAmount,
   receiptDate,
@@ -25,9 +24,10 @@ export function ReceiptCard({
   taxClaimable,
   taxClaimableConfidence,
   status = 'complete',
+  reimbursable,
 }: ReceiptCardProps) {
-  const content = (
-    <Card className="hover:shadow-md transition-shadow cursor-pointer">
+  return (
+    <Card className="hover:shadow-md transition-shadow cursor-pointer h-full">
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
@@ -51,15 +51,13 @@ export function ReceiptCard({
         {gstAmount && parseFloat(gstAmount) > 0 && (
           <Badge variant="outline" className="text-xs">GST ${parseFloat(gstAmount).toFixed(2)}</Badge>
         )}
+        {reimbursable && (
+          <Badge variant="outline" className="text-xs text-blue-600 border-blue-200">Reimbursable</Badge>
+        )}
         {status !== 'complete' && (
           <Badge variant="outline" className="capitalize text-xs">{status}</Badge>
         )}
       </CardContent>
     </Card>
   );
-
-  if (status === 'complete' || status === 'error') {
-    return <Link href={`/dashboard/receipts/${id}`}>{content}</Link>;
-  }
-  return content;
 }

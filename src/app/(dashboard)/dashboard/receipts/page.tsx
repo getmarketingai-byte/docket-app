@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { buttonVariants } from '@/components/ui/button';
-import { ReceiptCard } from '@/components/receipts/receipt-card';
+import { ReceiptsTimeline } from '@/components/receipts/receipts-timeline';
 import { getCurrentUserProfileId, getUserReceipts } from '@/lib/db/queries';
 import { cn } from '@/lib/utils';
 
@@ -45,7 +45,6 @@ export default async function ReceiptsPage({ searchParams }: PageProps) {
   const hasMore = allReceipts.length > PAGE_SIZE;
   const receipts = allReceipts.slice(0, PAGE_SIZE);
 
-  // Group by date label
   const groups: { label: string; items: typeof receipts }[] = [];
   let currentLabel = '';
 
@@ -80,31 +79,8 @@ export default async function ReceiptsPage({ searchParams }: PageProps) {
         </div>
       ) : (
         <>
-          {groups.map((group) => (
-            <section key={group.label}>
-              <h2 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wide">
-                {group.label}
-              </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {group.items.map((r) => (
-                  <ReceiptCard
-                    key={r.id}
-                    id={r.id}
-                    merchant={r.merchant}
-                    totalAmount={r.totalAmount}
-                    receiptDate={r.receiptDate}
-                    category={r.category}
-                    gstAmount={r.gstAmount}
-                    taxClaimable={r.taxClaimable}
-                    taxClaimableConfidence={r.taxClaimableConfidence}
-                    status={r.status}
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
+          <ReceiptsTimeline groups={groups} />
 
-          {/* Pagination */}
           <div className="flex justify-between items-center pt-4">
             {page > 1 ? (
               <Link href={`/dashboard/receipts?page=${page - 1}`} className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}>

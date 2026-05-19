@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { db } from '@/lib/db';
-import { receipts, userProfiles, auditLogs, vehicles, vehicleFuelLogs } from '@/lib/db/schema';
+import { receipts, userProfiles, auditLogs, vehicles, vehicleFuelLogs, budgets } from '@/lib/db/schema';
 import { eq, desc, and, ilike, gte, lte, or, sql } from 'drizzle-orm';
 
 export type ReceiptFilters = {
@@ -233,4 +233,205 @@ export async function getVehicleWithStats(userId: string, vehicleId: string) {
   }
 
   return { vehicle, vehicleReceipts, fuelLogs, totalCost, costByCategory, fuelEconomy, costPerKm };
+}
+
+// ─── Reimbursement queries ────────────────────────────────────────────────────
+
+/**
+ * Get all reimbursable receipts for a user (with optional status filter).
+ */
+export async function getReimbursableReceipts(
+  profileId: string,
+  statusFilter?: string,
+) {
+  const conditions = [
+    eq(receipts.userId, profileId),
+    eq(receipts.reimbursable, true),
+  ];
+
+  if (statusFilter) {
+    conditions.push(eq(receipts.reimbursementStatus, statusFilter));
+  }
+
+  return db
+    .select()
+    .from(receipts)
+    .where(and(...conditions))
+    .orderBy(desc(receipts.receiptDate));
+}
+
+/**
+ * Reimbursement stats: outstanding total, by-source breakdown, aging buckets.
+ */
+export async function getReimbursementStats(profileId: string) {
+  const all = await db
+    .select({
+      id: receipts.id,
+      totalAmount: receipts.totalAmount,
+      reimbursementAmount: receipts.reimbursementAmount,
+      reimbursementStatus: receipts.reimbursementStatus,
+      reimbursementSource: receipts.reimbursementSource,
+      reimbursementSubmittedAt: receipts.reimbursementSubmittedAt,
+      receiptDate: receipts.receiptDate,
+    })
+    .from(receipts)
+    .where(and(eq(receipts.userId, profileId), eq(receipts.reimbursable, true)));
+
+  const now = new Date();
+
+  const outstanding = all.filter(
+    (r) => r.reimbursementStatus === 'pending' || r.reimbursementStatus === 'submitted',
+  );
+
+  const outstandingTotal = outstanding.reduce(
+    (sum, r) => sum + parseFloat(r.reimbursementAmount ?? r.totalAmount ?? '0'),
+    0,
+  );
+
+  const bySource: Record<string, number> = {};
+  for (const r of outstanding) {
+    const src = r.reimbursementSource ?? 'Unknown';
+    bySource[src] = (bySource[src] ?? 0) + parseFloat(r.reimbursementAmount ?? r.totalAmount ?? '0');
+  }
+
+  const aging = { d0_30: 0, d30_60: 0, d60_90: 0, d90plus: 0 };
+  for (const r of outstanding) {
+    const refDate = r.reimbursementSubmittedAt ?? r.receiptDate ?? now;
+    const days = Math.floor((now.getTime() - new Date(refDate).getTime()) / (1000 * 60 * 60 * 24));
+    if (days <= 30) aging.d0_30 += parseFloat(r.reimbursementAmount ?? r.totalAmount ?? '0');
+    else if (days <= 60) aging.d30_60 += parseFloat(r.reimbursementAmount ?? r.totalAmount ?? '0');
+    else if (days <= 90) aging.d60_90 += parseFloat(r.reimbursementAmount ?? r.totalAmount ?? '0');
+    else aging.d90plus += parseFloat(r.reimbursementAmount ?? r.totalAmount ?? '0');
+  }
+
+  const recent = [...all]
+    .sort((a, b) => new Date(b.receiptDate ?? 0).getTime() - new Date(a.receiptDate ?? 0).getTime())
+    .slice(0, 10);
+
+  const counts = {
+    pending: all.filter((r) => r.reimbursementStatus === 'pending' || !r.reimbursementStatus).length,
+    submitted: all.filter((r) => r.reimbursementStatus === 'submitted').length,
+    reimbursed: all.filter((r) => r.reimbursementStatus === 'reimbursed').length,
+    declined: all.filter((r) => r.reimbursementStatus === 'declined').length,
+    total: all.length,
+  };
+
+  return { outstandingTotal, bySource, aging, recent, counts };
+}
+
+// ─── Budget queries ────────────────────────────────────────────────────────────
+
+export async function getBudgets(profileId: string) {
+  return db.select().from(budgets).where(eq(budgets.userId, profileId));
+}
+
+export async function getBudgetMap(profileId: string): Promise<Record<string, number>> {
+  const rows = await getBudgets(profileId);
+  const map: Record<string, number> = {};
+  for (const b of rows) {
+    map[b.category] = parseFloat(b.monthlyLimit);
+  }
+  return map;
+}
+
+// ─── Spending insight queries ──────────────────────────────────────────────────
+
+export async function getSpendingInsights(profileId: string) {
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+  const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+
+  const allReceipts = await db
+    .select({
+      id: receipts.id,
+      totalAmount: receipts.totalAmount,
+      category: receipts.category,
+      merchant: receipts.merchant,
+      receiptDate: receipts.receiptDate,
+      status: receipts.status,
+    })
+    .from(receipts)
+    .where(
+      and(
+        eq(receipts.userId, profileId),
+        gte(receipts.receiptDate, threeMonthsAgo),
+        sql`${receipts.status} = 'complete'`,
+      ),
+    );
+
+  const thisMonth = allReceipts.filter(
+    (r) => r.receiptDate && new Date(r.receiptDate) >= startOfMonth,
+  );
+  const lastMonth = allReceipts.filter(
+    (r) =>
+      r.receiptDate &&
+      new Date(r.receiptDate) >= startOfLastMonth &&
+      new Date(r.receiptDate) <= endOfLastMonth,
+  );
+  const threeMonthAll = allReceipts;
+
+  // Top categories this month
+  const catSpend: Record<string, number> = {};
+  for (const r of thisMonth) {
+    const cat = r.category ?? 'Uncategorised';
+    catSpend[cat] = (catSpend[cat] ?? 0) + parseFloat(r.totalAmount ?? '0');
+  }
+  const topCategories = Object.entries(catSpend)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([category, amount]) => ({ category, amount }));
+
+  // Top merchants this month
+  const merchantSpend: Record<string, number> = {};
+  for (const r of thisMonth) {
+    if (!r.merchant) continue;
+    merchantSpend[r.merchant] = (merchantSpend[r.merchant] ?? 0) + parseFloat(r.totalAmount ?? '0');
+  }
+  const topMerchants = Object.entries(merchantSpend)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([merchant, amount]) => ({ merchant, amount }));
+
+  const thisMonthTotal = thisMonth.reduce((s, r) => s + parseFloat(r.totalAmount ?? '0'), 0);
+  const lastMonthTotal = lastMonth.reduce((s, r) => s + parseFloat(r.totalAmount ?? '0'), 0);
+
+  // 3-month avg monthly spend
+  const avg3Month = threeMonthAll.reduce((s, r) => s + parseFloat(r.totalAmount ?? '0'), 0) / 3;
+
+  // Average receipt value this month
+  const avgReceiptValue = thisMonth.length > 0 ? thisMonthTotal / thisMonth.length : 0;
+
+  // Monthly trend: last 6 months
+  const monthlyTrend: { month: string; amount: number }[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const dEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+    const label = d.toLocaleDateString('en-AU', { month: 'short', year: '2-digit' });
+    const amount = allReceipts
+      .filter(
+        (r) =>
+          r.receiptDate &&
+          new Date(r.receiptDate) >= d &&
+          new Date(r.receiptDate) <= dEnd,
+      )
+      .reduce((s, r) => s + parseFloat(r.totalAmount ?? '0'), 0);
+    monthlyTrend.push({ month: label, amount });
+  }
+
+  // Category spend this month (for budget widget)
+  const categorySpendThisMonth = catSpend;
+
+  return {
+    topCategories,
+    topMerchants,
+    thisMonthTotal,
+    lastMonthTotal,
+    avg3Month,
+    avgReceiptValue,
+    monthlyTrend,
+    categorySpendThisMonth,
+    thisMonthCount: thisMonth.length,
+  };
 }

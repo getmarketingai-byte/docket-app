@@ -30,6 +30,13 @@ const TAX_CATEGORIES = [
   { value: 'non_deductible', label: 'Non-deductible' },
 ];
 
+const REIMBURSEMENT_STATUSES = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'submitted', label: 'Submitted' },
+  { value: 'reimbursed', label: 'Reimbursed' },
+  { value: 'declined', label: 'Declined' },
+];
+
 type Receipt = {
   id: string;
   merchant?: string | null;
@@ -54,6 +61,13 @@ type Receipt = {
   fuelType?: string | null;
   fuelLitres?: string | null;
   odometerReading?: number | null;
+  // Reimbursement
+  reimbursable?: boolean | null;
+  reimbursementStatus?: string | null;
+  reimbursementSource?: string | null;
+  reimbursementSubmittedAt?: Date | null;
+  reimbursementReceivedAt?: Date | null;
+  reimbursementAmount?: string | null;
 };
 
 type AuditEntry = {
@@ -71,6 +85,7 @@ export function ReceiptEditForm({ receipt, auditLog }: Props) {
   const [saved, setSaved] = useState(false);
   const [isPending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
+  const [isReimbursable, setIsReimbursable] = useState(receipt.reimbursable ?? false);
 
   const handleSave = async (formData: FormData) => {
     setSaving(true);
@@ -93,6 +108,13 @@ export function ReceiptEditForm({ receipt, auditLog }: Props) {
 
   const receiptDateStr = receipt.receiptDate
     ? new Date(receipt.receiptDate).toISOString().slice(0, 10)
+    : '';
+
+  const reimbSubmittedStr = receipt.reimbursementSubmittedAt
+    ? new Date(receipt.reimbursementSubmittedAt).toISOString().slice(0, 10)
+    : '';
+  const reimbReceivedStr = receipt.reimbursementReceivedAt
+    ? new Date(receipt.reimbursementReceivedAt).toISOString().slice(0, 10)
     : '';
 
   return (
@@ -220,6 +242,79 @@ export function ReceiptEditForm({ receipt, auditLog }: Props) {
               defaultValue={receipt.businessPercentage ?? 0}
             />
           </div>
+        </div>
+
+        {/* Reimbursement */}
+        <div className="rounded-lg border p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">Reimbursement</span>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                name="reimbursable"
+                value="true"
+                defaultChecked={receipt.reimbursable ?? false}
+                onChange={(e) => setIsReimbursable(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300"
+              />
+              <span className="text-sm">Reimbursable</span>
+            </label>
+          </div>
+
+          {isReimbursable && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="reimbursementStatus">Status</Label>
+                <Select name="reimbursementStatus" defaultValue={receipt.reimbursementStatus ?? 'pending'}>
+                  <SelectTrigger id="reimbursementStatus">
+                    <SelectValue placeholder="Select..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {REIMBURSEMENT_STATUSES.map((s) => (
+                      <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="reimbursementSource">Source (who owes)</Label>
+                <Input
+                  id="reimbursementSource"
+                  name="reimbursementSource"
+                  defaultValue={receipt.reimbursementSource ?? ''}
+                  placeholder="e.g. Employer, Client name"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="reimbursementAmount">Amount to Reimburse (AUD)</Label>
+                <Input
+                  id="reimbursementAmount"
+                  name="reimbursementAmount"
+                  type="number"
+                  step="0.01"
+                  defaultValue={receipt.reimbursementAmount ?? receipt.totalAmount ?? ''}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="reimbursementSubmittedAt">Date Submitted</Label>
+                <Input
+                  id="reimbursementSubmittedAt"
+                  name="reimbursementSubmittedAt"
+                  type="date"
+                  defaultValue={reimbSubmittedStr}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="reimbursementReceivedAt">Date Reimbursed</Label>
+                <Input
+                  id="reimbursementReceivedAt"
+                  name="reimbursementReceivedAt"
+                  type="date"
+                  defaultValue={reimbReceivedStr}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Notes */}
