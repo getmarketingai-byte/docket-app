@@ -22,6 +22,8 @@ export const userProfiles = pgTable(
     taxProfile: jsonb('tax_profile').$type<Record<string, unknown>>(),
     subscriptionTier: text('subscription_tier').default('free'),
     stripeCustomerId: text('stripe_customer_id'),
+    stripeSubscriptionId: text('stripe_subscription_id'),
+    stripeSubscriptionStatus: text('stripe_subscription_status'),
     settings: jsonb('settings').$type<Record<string, unknown>>(),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),

@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@clerk/nextjs/server';
 import { SettingsForm } from '@/components/settings/settings-form';
+import { BillingSection } from '@/components/settings/billing-section';
 import { getProfile } from '@/lib/actions/settings';
 
 export default async function SettingsPage() {
@@ -22,6 +23,11 @@ export default async function SettingsPage() {
         displayName={profile?.displayName}
         taxProfile={profile?.taxProfile as Record<string, string | null> | null}
         settings={profile?.settings as Record<string, unknown> | null}
+      />
+
+      <BillingSection
+        subscriptionTier={profile?.subscriptionTier ?? null}
+        stripeSubscriptionStatus={profile?.stripeSubscriptionStatus ?? null}
       />
     </div>
   );
