@@ -39,6 +39,7 @@ const REIMBURSEMENT_STATUSES = [
 
 type Receipt = {
   id: string;
+  status?: string | null;
   merchant?: string | null;
   merchantAbn?: string | null;
   receiptDate?: Date | null;
@@ -117,9 +118,11 @@ export function ReceiptEditForm({ receipt, auditLog }: Props) {
     ? new Date(receipt.reimbursementReceivedAt).toISOString().slice(0, 10)
     : '';
 
+  const isProcessing = receipt.status === 'processing' || receipt.status === 'uploading';
+
   return (
     <div className="space-y-8">
-      {/* Receipt image */}
+      {/* Receipt image — shown regardless of status */}
       {(receipt.compressedBlobUrl || receipt.originalBlobUrl) && (
         <div className="rounded-lg overflow-hidden border bg-muted">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -131,24 +134,43 @@ export function ReceiptEditForm({ receipt, auditLog }: Props) {
         </div>
       )}
 
-      {/* Tax claimability */}
-      <div className="rounded-lg border p-4 bg-muted/30 space-y-1">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium">Tax claimability</span>
-          <ClaimabilityBadge
-            taxClaimable={receipt.taxClaimable}
-            confidence={receipt.taxClaimableConfidence}
-          />
+      {/* Processing banner */}
+      {isProcessing && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
+          <p className="font-medium">AI is processing this receipt</p>
+          <p className="mt-0.5 text-xs opacity-80">
+            You can enter details manually below — your data will be saved and the AI result discarded.
+          </p>
         </div>
-        {receipt.taxClaimableReasoning && (
-          <p className="text-xs text-muted-foreground">{receipt.taxClaimableReasoning}</p>
-        )}
-        <p className="text-xs text-muted-foreground italic">
-          AI estimate — review with your accountant.
-        </p>
-      </div>
+      )}
+
+      {/* Tax claimability — only shown after processing */}
+      {!isProcessing && (
+        <div className="rounded-lg border p-4 bg-muted/30 space-y-1">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">Tax claimability</span>
+            <ClaimabilityBadge
+              taxClaimable={receipt.taxClaimable}
+              confidence={receipt.taxClaimableConfidence}
+            />
+          </div>
+          {receipt.taxClaimableReasoning && (
+            <p className="text-xs text-muted-foreground">{receipt.taxClaimableReasoning}</p>
+          )}
+          <p className="text-xs text-muted-foreground italic">
+            AI estimate — review with your accountant.
+          </p>
+        </div>
+      )}
 
       <form ref={formRef} action={handleSave} className="space-y-6">
+        {/* Hidden fields for manual entry */}
+        {isProcessing && (
+          <>
+            <input type="hidden" name="_status" value="complete" />
+            <input type="hidden" name="_source" value="manual" />
+          </>
+        )}
         {/* Core fields */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
@@ -340,7 +362,7 @@ export function ReceiptEditForm({ receipt, auditLog }: Props) {
             {isPending ? 'Deleting…' : 'Delete receipt'}
           </Button>
           <Button type="submit" disabled={saving}>
-            {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save changes'}
+            {saving ? 'Saving…' : saved ? '✓ Saved' : isProcessing ? 'Save manually' : 'Save changes'}
           </Button>
         </div>
       </form>

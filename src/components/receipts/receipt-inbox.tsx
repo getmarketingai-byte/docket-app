@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { Loader2, RefreshCw, AlertCircle, CheckCircle, Clock } from 'lucide-react';
+import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ProcessingElapsed } from './processing-elapsed';
@@ -105,6 +106,14 @@ export function ReceiptInbox({ refreshTrigger }: Props) {
                   {cfg.icon}
                   {cfg.label}
                 </Badge>
+              )}
+              {r.status === 'processing' && (
+                <Link
+                  href={`/dashboard/receipts/${r.id}`}
+                  className="text-xs text-blue-600 hover:underline whitespace-nowrap"
+                >
+                  Enter manually →
+                </Link>
               )}
               {r.status === 'error' && (
                 <Button variant="ghost" size="sm" onClick={() => retryReceipt(r.id)} className="h-7 text-xs">

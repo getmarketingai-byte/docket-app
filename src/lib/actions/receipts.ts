@@ -98,6 +98,16 @@ export async function updateReceipt(receiptId: string, formData: FormData) {
     auditEntries.push({ field: 'reimbursementReceivedAt', newValue: reimbReceivedVal as string });
   }
 
+  // Manual entry: mark receipt as complete with source=manual
+  const statusVal = formData.get('_status');
+  if (statusVal) {
+    fields['status'] = statusVal as string;
+  }
+  const sourceVal = formData.get('_source');
+  if (sourceVal) {
+    fields['source'] = sourceVal as string;
+  }
+
   if (Object.keys(fields).length === 0) return;
 
   await db

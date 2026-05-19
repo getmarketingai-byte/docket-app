@@ -130,7 +130,6 @@ export const processReceipt = inngest.createFunction(
       const [current] = await db.select({ status: receipts.status }).from(receipts).where(eq(receipts.id, receiptId));
       if (current?.status === 'complete') return; // manual entry took precedence
 
-      const d = extraction;
       await db.update(receipts)
         .set({
           status: 'complete',
