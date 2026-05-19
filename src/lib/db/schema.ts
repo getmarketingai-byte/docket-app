@@ -117,6 +117,7 @@ export const receipts = pgTable(
     // Meta
     notes: text('notes'),
     isDuplicate: boolean('is_duplicate').default(false),
+    duplicateOfId: uuid('duplicate_of_id'), // FK set after table definition to avoid self-reference issues
     source: text('source').default('upload'),
     vehicleId: uuid('vehicle_id').references(() => vehicles.id, { onDelete: 'set null' }),
 
