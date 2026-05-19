@@ -204,7 +204,7 @@ export function BudgetSettingsClient({
                 <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${v}`} width={50} />
                 <Tooltip
-                  formatter={(v: number) => fmt(v)}
+                  formatter={(v) => fmt(Number(v))}
                   labelStyle={{ fontSize: 12 }}
                   contentStyle={{ fontSize: 12 }}
                 />
