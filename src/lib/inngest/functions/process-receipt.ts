@@ -5,6 +5,10 @@ import { eq } from 'drizzle-orm';
 import { put } from '@vercel/blob';
 import Anthropic from '@anthropic-ai/sdk';
 
+if (!process.env.ANTHROPIC_API_KEY) {
+  throw new Error('ANTHROPIC_API_KEY environment variable is not set');
+}
+
 const anthropic = new Anthropic();
 
 const EXTRACTION_PROMPT = `You are an Australian receipt and invoice extraction assistant. Analyze this receipt image and extract all data.
