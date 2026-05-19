@@ -16,6 +16,7 @@ import {
   Car,
   PieChart,
   CreditCard,
+  BarChart2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -23,6 +24,7 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/dashboard/receipts', label: 'Receipts', icon: Receipt },
+  { href: '/dashboard/analytics', label: 'Analytics', icon: BarChart2 },
   { href: '/dashboard/vehicles', label: 'Vehicles', icon: Car },
   { href: '/dashboard/reimbursements', label: 'Reimbursements', icon: CreditCard },
   { href: '/dashboard/budgets', label: 'Budgets', icon: PieChart },

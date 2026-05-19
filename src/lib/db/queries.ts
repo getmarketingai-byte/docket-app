@@ -172,6 +172,61 @@ export async function getDashboardStats(profileId: string) {
   return { total, totalSpend, totalGst, pendingReview, claimableAmount };
 }
 
+export async function getTaxSummary(profileId: string) {
+  const now = new Date();
+  const fyStart = new Date(now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1, 6, 1);
+
+  const fyReceipts = await db
+    .select({
+      totalAmount: receipts.totalAmount,
+      gstAmount: receipts.gstAmount,
+      taxClaimable: receipts.taxClaimable,
+      taxClaimableConfidence: receipts.taxClaimableConfidence,
+      category: receipts.category,
+    })
+    .from(receipts)
+    .where(
+      and(
+        eq(receipts.userId, profileId),
+        gte(receipts.receiptDate, fyStart),
+        sql`${receipts.status} = 'complete'`,
+      ),
+    );
+
+  const claimable = fyReceipts.filter((r) => r.taxClaimable === true);
+  const nonClaimable = fyReceipts.filter((r) => r.taxClaimable === false);
+  const uncertain = fyReceipts.filter((r) => r.taxClaimable === null);
+
+  const claimableTotal = claimable.reduce((s, r) => s + parseFloat(r.totalAmount ?? '0'), 0);
+  const nonClaimableTotal = nonClaimable.reduce((s, r) => s + parseFloat(r.totalAmount ?? '0'), 0);
+  const uncertainTotal = uncertain.reduce((s, r) => s + parseFloat(r.totalAmount ?? '0'), 0);
+  const gstTotal = fyReceipts.reduce((s, r) => s + parseFloat(r.gstAmount ?? '0'), 0);
+
+  // Category breakdown of claimable spend
+  const catBreakdown: Record<string, number> = {};
+  for (const r of claimable) {
+    const cat = r.category ?? 'Uncategorised';
+    catBreakdown[cat] = (catBreakdown[cat] ?? 0) + parseFloat(r.totalAmount ?? '0');
+  }
+  const claimableByCategory = Object.entries(catBreakdown)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([category, amount]) => ({ category, amount }));
+
+  const fyLabel = `FY${String(fyStart.getFullYear()).slice(2)}/${String(fyStart.getFullYear() + 1).slice(2)}`;
+
+  return {
+    fyLabel,
+    claimableTotal,
+    nonClaimableTotal,
+    uncertainTotal,
+    gstTotal,
+    claimableCount: claimable.length,
+    totalCount: fyReceipts.length,
+    claimableByCategory,
+  };
+}
+
 // ─── Vehicle queries ───────────────────────────────────────────────────────────
 
 export async function getVehiclesForUser(userId: string) {
@@ -433,5 +488,113 @@ export async function getSpendingInsights(profileId: string) {
     monthlyTrend,
     categorySpendThisMonth,
     thisMonthCount: thisMonth.length,
+  };
+}
+
+// ─── Full analytics query (6-month window) ────────────────────────────────────
+
+export async function getAnalyticsData(profileId: string) {
+  const now = new Date();
+  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+
+  const rows = await db
+    .select({
+      id: receipts.id,
+      totalAmount: receipts.totalAmount,
+      gstAmount: receipts.gstAmount,
+      category: receipts.category,
+      merchant: receipts.merchant,
+      receiptDate: receipts.receiptDate,
+      taxClaimable: receipts.taxClaimable,
+      taxClaimableConfidence: receipts.taxClaimableConfidence,
+      taxCategory: receipts.taxCategory,
+      businessPercentage: receipts.businessPercentage,
+    })
+    .from(receipts)
+    .where(
+      and(
+        eq(receipts.userId, profileId),
+        gte(receipts.receiptDate, sixMonthsAgo),
+        sql`${receipts.status} = 'complete'`,
+      ),
+    );
+
+  // Monthly spend trend (6 months)
+  const monthlySpend: { month: string; amount: number; gst: number }[] = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const dEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+    const label = d.toLocaleDateString('en-AU', { month: 'short', year: '2-digit' });
+    const bucket = rows.filter(
+      (r) => r.receiptDate && new Date(r.receiptDate) >= d && new Date(r.receiptDate) <= dEnd,
+    );
+    const amount = bucket.reduce((s, r) => s + parseFloat(r.totalAmount ?? '0'), 0);
+    const gst = bucket.reduce((s, r) => s + parseFloat(r.gstAmount ?? '0'), 0);
+    monthlySpend.push({ month: label, amount, gst });
+  }
+
+  // Category breakdown (all 6 months)
+  const catMap: Record<string, number> = {};
+  for (const r of rows) {
+    const cat = r.category ?? 'Uncategorised';
+    catMap[cat] = (catMap[cat] ?? 0) + parseFloat(r.totalAmount ?? '0');
+  }
+  const categoryBreakdown = Object.entries(catMap)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([category, amount]) => ({ category, amount }));
+
+  // Top merchants (all 6 months)
+  const merchantMap: Record<string, { amount: number; count: number }> = {};
+  for (const r of rows) {
+    if (!r.merchant) continue;
+    if (!merchantMap[r.merchant]) merchantMap[r.merchant] = { amount: 0, count: 0 };
+    merchantMap[r.merchant].amount += parseFloat(r.totalAmount ?? '0');
+    merchantMap[r.merchant].count += 1;
+  }
+  const topMerchants = Object.entries(merchantMap)
+    .sort((a, b) => b[1].amount - a[1].amount)
+    .slice(0, 10)
+    .map(([merchant, { amount, count }]) => ({ merchant, amount, count }));
+
+  // Tax summary
+  const claimable = rows.filter((r) => r.taxClaimable === true);
+  const notClaimable = rows.filter((r) => r.taxClaimable === false);
+  const unreviewed = rows.filter((r) => r.taxClaimable === null);
+
+  const claimableTotal = claimable.reduce((s, r) => s + parseFloat(r.totalAmount ?? '0'), 0);
+  const claimableGst = claimable.reduce((s, r) => s + parseFloat(r.gstAmount ?? '0'), 0);
+  const notClaimableTotal = notClaimable.reduce((s, r) => s + parseFloat(r.totalAmount ?? '0'), 0);
+  const unreviewedTotal = unreviewed.reduce((s, r) => s + parseFloat(r.totalAmount ?? '0'), 0);
+
+  // Tax category breakdown (claimable only)
+  const taxCatMap: Record<string, number> = {};
+  for (const r of claimable) {
+    const cat = r.taxCategory ?? r.category ?? 'Other';
+    taxCatMap[cat] = (taxCatMap[cat] ?? 0) + parseFloat(r.totalAmount ?? '0');
+  }
+  const taxCategoryBreakdown = Object.entries(taxCatMap)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([category, amount]) => ({ category, amount }));
+
+  const totalSpend = rows.reduce((s, r) => s + parseFloat(r.totalAmount ?? '0'), 0);
+  const totalGst = rows.reduce((s, r) => s + parseFloat(r.gstAmount ?? '0'), 0);
+
+  return {
+    monthlySpend,
+    categoryBreakdown,
+    topMerchants,
+    taxSummary: {
+      claimableTotal,
+      claimableGst,
+      notClaimableTotal,
+      unreviewedTotal,
+      totalSpend,
+      totalGst,
+      claimableCount: claimable.length,
+      totalCount: rows.length,
+    },
+    taxCategoryBreakdown,
   };
 }

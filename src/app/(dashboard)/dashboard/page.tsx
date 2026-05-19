@@ -3,6 +3,10 @@ import { redirect } from 'next/navigation';
 import { buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ReceiptCard } from '@/components/receipts/receipt-card';
+import { SpendingChart } from '@/components/analytics/spending-chart';
+import { CategoryDonut } from '@/components/analytics/category-donut';
+import { MerchantList } from '@/components/analytics/merchant-list';
+import { TaxSummary } from '@/components/analytics/tax-summary';
 import {
   getCurrentUserProfileId,
   getUserReceipts,
@@ -10,6 +14,7 @@ import {
   getReimbursementStats,
   getBudgetMap,
   getSpendingInsights,
+  getTaxSummary,
 } from '@/lib/db/queries';
 import { cn } from '@/lib/utils';
 
@@ -21,13 +26,16 @@ export default async function DashboardPage() {
   const profileId = await getCurrentUserProfileId();
   if (!profileId) redirect('/sign-in');
 
-  const [stats, recentReceipts, reimbStats, budgetMap, insights] = await Promise.all([
+  const [stats, recentReceipts, reimbStats, budgetMap, insights, taxSummary] = await Promise.all([
     getDashboardStats(profileId),
     getUserReceipts(profileId, { limit: 6, sortBy: 'date' }),
     getReimbursementStats(profileId),
     getBudgetMap(profileId),
     getSpendingInsights(profileId),
+    getTaxSummary(profileId),
   ]);
+
+  const hasAnalyticsData = insights.monthlyTrend.some((m) => m.amount > 0);
 
   return (
     <div className="space-y-8">
@@ -91,6 +99,84 @@ export default async function DashboardPage() {
           <Link href="/dashboard/upload" className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}>
             View
           </Link>
+        </div>
+      )}
+
+      {/* Visual analytics — only show when there's data */}
+      {hasAnalyticsData && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Monthly spending chart */}
+          <Card className="lg:col-span-2">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium">Monthly spending</CardTitle>
+                <div className="flex items-baseline gap-3 text-sm">
+                  <span className="text-muted-foreground">This month</span>
+                  <span className="font-bold">{fmt(insights.thisMonthTotal)}</span>
+                  {insights.lastMonthTotal > 0 && (
+                    <span className={cn(
+                      'text-xs',
+                      insights.thisMonthTotal > insights.lastMonthTotal ? 'text-red-500' : 'text-green-600'
+                    )}>
+                      {insights.thisMonthTotal > insights.lastMonthTotal ? '▲' : '▼'}
+                      {' '}
+                      {Math.abs(((insights.thisMonthTotal - insights.lastMonthTotal) / insights.lastMonthTotal) * 100).toFixed(0)}%
+                      {' vs last month'}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <SpendingChart data={insights.monthlyTrend} />
+            </CardContent>
+          </Card>
+
+          {/* Category breakdown */}
+          {insights.topCategories.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Spending by category</CardTitle>
+                <p className="text-xs text-muted-foreground">This month</p>
+              </CardHeader>
+              <CardContent>
+                <CategoryDonut data={insights.topCategories} />
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Top merchants */}
+          {insights.topMerchants.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Top merchants</CardTitle>
+                <p className="text-xs text-muted-foreground">This month</p>
+              </CardHeader>
+              <CardContent>
+                <MerchantList data={insights.topMerchants} />
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Tax summary */}
+          {taxSummary.totalCount > 0 && (
+            <Card className="lg:col-span-2">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Tax summary</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <TaxSummary
+                  fyLabel={taxSummary.fyLabel}
+                  claimableTotal={taxSummary.claimableTotal}
+                  nonClaimableTotal={taxSummary.nonClaimableTotal}
+                  uncertainTotal={taxSummary.uncertainTotal}
+                  gstTotal={taxSummary.gstTotal}
+                  claimableCount={taxSummary.claimableCount}
+                  totalCount={taxSummary.totalCount}
+                />
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
 
