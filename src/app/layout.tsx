@@ -4,6 +4,8 @@ import { ClerkProvider } from '@clerk/nextjs';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import Script from 'next/script';
+import { ServiceWorkerRegister } from '@/components/pwa/service-worker-register';
+import { InstallPrompt as PWAInstallPrompt } from '@/components/pwa/install-prompt';
 import './globals.css';
 
 const geistSans = Geist({
@@ -24,6 +26,15 @@ export const metadata: Metadata = {
   description:
     'AI-powered receipt intelligence for the Australian market. Scan receipts, track tax-deductible expenses, and export clean reports for your accountant.',
   metadataBase: new URL('https://docket.com.au'),
+  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Docket',
+  },
+  formatDetection: {
+    telephone: false,
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -38,6 +49,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       >
         <body className="min-h-full flex flex-col">
           {children}
+          <PWAInstallPrompt />
+          <ServiceWorkerRegister />
           <Analytics />
           <SpeedInsights />
           <Script
