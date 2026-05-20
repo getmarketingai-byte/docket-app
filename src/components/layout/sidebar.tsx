@@ -10,13 +10,13 @@ import {
   Search,
   Download,
   Settings,
-  FileText,
   Menu,
   X,
   Car,
   PieChart,
   CreditCard,
   BarChart2,
+  Share2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -31,6 +31,7 @@ const navItems = [
   { href: '/dashboard/upload', label: 'Upload', icon: Upload },
   { href: '/dashboard/search', label: 'Search', icon: Search },
   { href: '/dashboard/exports', label: 'Exports', icon: Download },
+  { href: '/dashboard/share', label: 'Share', icon: Share2 },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ];
 

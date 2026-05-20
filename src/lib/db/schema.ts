@@ -166,6 +166,26 @@ export const auditLogs = pgTable('audit_logs', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+// ─── share_tokens ─────────────────────────────────────────────────────────────
+export const shareTokens = pgTable(
+  'share_tokens',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull().references(() => userProfiles.id, { onDelete: 'cascade' }),
+    token: text('token').notNull().unique(), // 64-char hex random
+    label: text('label').notNull().default('Accountant access'), // user-facing name
+    dateFrom: timestamp('date_from'),   // optional filter: receipts from this date
+    dateTo: timestamp('date_to'),       // optional filter: receipts up to this date
+    expiresAt: timestamp('expires_at'), // null = no expiry
+    revokedAt: timestamp('revoked_at'), // null = active
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    tokenIdx: uniqueIndex('share_tokens_token_idx').on(t.token),
+    userIdx: index('share_tokens_user_idx').on(t.userId),
+  }),
+);
+
 // ─── vehicle_fuel_logs ────────────────────────────────────────────────────────
 export const vehicleFuelLogs = pgTable(
   'vehicle_fuel_logs',
