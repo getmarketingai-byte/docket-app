@@ -6,6 +6,7 @@ import { SpeedInsights } from '@vercel/speed-insights/next';
 import Script from 'next/script';
 import { ServiceWorkerRegister } from '@/components/pwa/service-worker-register';
 import { InstallPrompt as PWAInstallPrompt } from '@/components/pwa/install-prompt';
+import { ThemeProvider } from '@/components/theme-provider';
 import './globals.css';
 
 const geistSans = Geist({
@@ -45,12 +46,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <html
         lang="en"
+        suppressHydrationWarning
         className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       >
         <body className="min-h-full flex flex-col">
-          {children}
-          <PWAInstallPrompt />
-          <ServiceWorkerRegister />
+          <ThemeProvider>
+            {children}
+            <PWAInstallPrompt />
+            <ServiceWorkerRegister />
+          </ThemeProvider>
           <Analytics />
           <SpeedInsights />
           <Script
