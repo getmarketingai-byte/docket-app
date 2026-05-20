@@ -162,6 +162,31 @@ export async function bulkMarkReimbursable(receiptIds: string[], reimbursable: b
   revalidatePath('/dashboard/reimbursements');
 }
 
+export async function bulkCategorize(receiptIds: string[], category: string) {
+  if (receiptIds.length === 0) return;
+  const profileId = await getProfileId();
+
+  await db
+    .update(receipts)
+    .set({ category, updatedAt: new Date() })
+    .where(and(eq(receipts.userId, profileId), inArray(receipts.id, receiptIds)));
+
+  revalidatePath('/dashboard/receipts');
+  revalidatePath('/dashboard');
+}
+
+export async function bulkDelete(receiptIds: string[]) {
+  if (receiptIds.length === 0) return;
+  const profileId = await getProfileId();
+
+  await db
+    .delete(receipts)
+    .where(and(eq(receipts.userId, profileId), inArray(receipts.id, receiptIds)));
+
+  revalidatePath('/dashboard/receipts');
+  revalidatePath('/dashboard');
+}
+
 export async function dismissDuplicateAction(receiptId: string) {
   const profileId = await getProfileId();
 

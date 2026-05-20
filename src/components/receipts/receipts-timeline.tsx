@@ -4,7 +4,19 @@ import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { ReceiptCard } from './receipt-card';
 import { Button } from '@/components/ui/button';
-import { bulkMarkReimbursable } from '@/lib/actions/receipts';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { bulkMarkReimbursable, bulkCategorize, bulkDelete } from '@/lib/actions/receipts';
+
+const CATEGORIES = [
+  'meals', 'travel', 'accommodation', 'office_supplies', 'equipment',
+  'software', 'utilities', 'professional_services', 'vehicle', 'other',
+];
 
 type Receipt = {
   id: string;
@@ -22,16 +34,14 @@ type Receipt = {
 };
 
 type Group = { label: string; items: Receipt[] };
-
-type Props = {
-  groups: Group[];
-};
+type Props = { groups: Group[] };
 
 export function ReceiptsTimeline({ groups }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [bulkCategory, setBulkCategory] = useState('');
 
   const retryReceipt = (id: string) => {
     fetch(`/api/receipts/${id}/retry`, { method: 'POST' }).catch(() => null);
@@ -49,45 +59,69 @@ export function ReceiptsTimeline({ groups }: Props) {
   };
 
   const toggleAll = () => {
-    if (selected.size === allIds.length) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(allIds));
-    }
+    setSelected(selected.size === allIds.length ? new Set() : new Set(allIds));
   };
 
-  const handleBulkMark = (reimbursable: boolean) => {
+  const finishBulk = (msg: string) => {
+    setSelected(new Set());
+    setSelectMode(false);
+    setBulkCategory('');
+    setActionMessage(msg);
+    setTimeout(() => setActionMessage(null), 3000);
+  };
+
+  const handleBulkReimbursable = (reimbursable: boolean) => {
     const ids = Array.from(selected);
-    if (ids.length === 0) return;
+    if (!ids.length) return;
     startTransition(async () => {
       await bulkMarkReimbursable(ids, reimbursable);
-      setSelected(new Set());
-      setSelectMode(false);
-      setActionMessage(
-        reimbursable
-          ? `${ids.length} receipt${ids.length !== 1 ? 's' : ''} marked as reimbursable.`
-          : `Reimbursable flag removed from ${ids.length} receipt${ids.length !== 1 ? 's' : ''}.`,
-      );
-      setTimeout(() => setActionMessage(null), 3000);
+      finishBulk(reimbursable
+        ? `${ids.length} receipt${ids.length !== 1 ? 's' : ''} marked reimbursable.`
+        : `Reimbursable flag removed from ${ids.length} receipt${ids.length !== 1 ? 's' : ''}.`);
+    });
+  };
+
+  const handleBulkCategorize = () => {
+    const ids = Array.from(selected);
+    if (!ids.length || !bulkCategory) return;
+    startTransition(async () => {
+      await bulkCategorize(ids, bulkCategory);
+      finishBulk(`${ids.length} receipt${ids.length !== 1 ? 's' : ''} categorised as ${bulkCategory.replace(/_/g, ' ')}.`);
+    });
+  };
+
+  const handleBulkExport = () => {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    // Export selected via query param (CSV route supports ?ids=)
+    const params = new URLSearchParams({ format: 'standard', ids: ids.join(',') });
+    window.location.href = `/api/exports/csv?${params}`;
+  };
+
+  const handleBulkDelete = () => {
+    const ids = Array.from(selected);
+    if (!ids.length) return;
+    if (!confirm(`Delete ${ids.length} receipt${ids.length !== 1 ? 's' : ''}? This cannot be undone.`)) return;
+    startTransition(async () => {
+      await bulkDelete(ids);
+      finishBulk(`${ids.length} receipt${ids.length !== 1 ? 's' : ''} deleted.`);
     });
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+      {/* Toolbar */}
+      <div className="flex items-center gap-3 flex-wrap">
         <Button
           variant={selectMode ? 'default' : 'outline'}
           size="sm"
-          onClick={() => {
-            setSelectMode((v) => !v);
-            setSelected(new Set());
-          }}
+          onClick={() => { setSelectMode(v => !v); setSelected(new Set()); }}
         >
-          {selectMode ? 'Cancel selection' : 'Select for reimbursement'}
+          {selectMode ? 'Cancel selection' : 'Select receipts'}
         </Button>
 
         {selectMode && (
-          <div className="flex items-center gap-2 flex-wrap">
+          <>
             <button
               type="button"
               onClick={toggleAll}
@@ -96,31 +130,63 @@ export function ReceiptsTimeline({ groups }: Props) {
               {selected.size === allIds.length ? 'Deselect all' : 'Select all'}
             </button>
             <span className="text-xs text-muted-foreground">{selected.size} selected</span>
-            <Button
-              size="sm"
-              disabled={selected.size === 0 || isPending}
-              onClick={() => handleBulkMark(true)}
-            >
-              Mark reimbursable
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={selected.size === 0 || isPending}
-              onClick={() => handleBulkMark(false)}
-            >
-              Remove flag
-            </Button>
-          </div>
+          </>
         )}
       </div>
 
+      {/* Bulk action bar — shown when items are selected */}
+      {selectMode && selected.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/40 px-4 py-3">
+          <span className="text-xs font-medium mr-1">{selected.size} selected:</span>
+
+          {/* Category */}
+          <div className="flex items-center gap-1.5">
+            <Select onValueChange={v => setBulkCategory(v ?? '')} value={bulkCategory}>
+              <SelectTrigger className="h-8 text-xs w-40">
+                <SelectValue placeholder="Set category…" />
+              </SelectTrigger>
+              <SelectContent>
+                {CATEGORIES.map(c => (
+                  <SelectItem key={c} value={c}>{c.replace(/_/g, ' ')}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button size="sm" className="h-8 text-xs" disabled={!bulkCategory || isPending} onClick={handleBulkCategorize}>
+              Apply
+            </Button>
+          </div>
+
+          <div className="w-px h-5 bg-border mx-0.5" />
+
+          {/* Reimbursement */}
+          <Button size="sm" variant="outline" className="h-8 text-xs" disabled={isPending} onClick={() => handleBulkReimbursable(true)}>
+            Mark reimbursable
+          </Button>
+          <Button size="sm" variant="ghost" className="h-8 text-xs" disabled={isPending} onClick={() => handleBulkReimbursable(false)}>
+            Remove flag
+          </Button>
+
+          <div className="w-px h-5 bg-border mx-0.5" />
+
+          {/* Export */}
+          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={handleBulkExport}>
+            Export CSV
+          </Button>
+
+          {/* Delete */}
+          <Button size="sm" variant="destructive" className="h-8 text-xs" disabled={isPending} onClick={handleBulkDelete}>
+            Delete
+          </Button>
+        </div>
+      )}
+
       {actionMessage && (
-        <div className="rounded-md bg-green-50 border border-green-200 px-4 py-2 text-sm text-green-800">
+        <div className="rounded-md bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 px-4 py-2 text-sm text-green-800 dark:text-green-200">
           {actionMessage}
         </div>
       )}
 
+      {/* Receipt grid */}
       {groups.map((group) => (
         <section key={group.label}>
           <h2 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wide">
