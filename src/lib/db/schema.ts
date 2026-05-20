@@ -151,6 +151,30 @@ export const budgets = pgTable(
   }),
 );
 
+// ─── share_links ──────────────────────────────────────────────────────────────
+
+export const shareLinks = pgTable(
+  'share_links',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => userProfiles.id, { onDelete: 'cascade' }),
+    token: text('token').notNull().unique(),
+    label: text('label'), // e.g. "For John Smith (Accountant)"
+    isActive: boolean('is_active').notNull().default(true),
+    expiresAt: timestamp('expires_at'), // null = never expires
+    viewCount: integer('view_count').notNull().default(0),
+    lastViewedAt: timestamp('last_viewed_at'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    tokenIdx: uniqueIndex('share_links_token_idx').on(t.token),
+    userIdx: index('share_links_user_idx').on(t.userId),
+  }),
+);
+
 // ─── audit_logs ───────────────────────────────────────────────────────────────
 
 export const auditLogs = pgTable('audit_logs', {

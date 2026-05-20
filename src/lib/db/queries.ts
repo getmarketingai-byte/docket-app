@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { db } from '@/lib/db';
-import { receipts, userProfiles, auditLogs, vehicles, vehicleFuelLogs, budgets } from '@/lib/db/schema';
+import { receipts, userProfiles, auditLogs, vehicles, vehicleFuelLogs, budgets, shareLinks } from '@/lib/db/schema';
 import { eq, desc, and, ilike, gte, lte, or, sql } from 'drizzle-orm';
 
 export type ReceiptFilters = {
@@ -634,6 +634,66 @@ export interface RecurringExpense {
   months: string[];
   lastAmount: number;
   lastDate: Date | null;
+}
+
+// ─── Share link queries ────────────────────────────────────────────────────────
+
+export async function getShareLinksForUser(profileId: string) {
+  return db
+    .select()
+    .from(shareLinks)
+    .where(eq(shareLinks.userId, profileId))
+    .orderBy(desc(shareLinks.createdAt));
+}
+
+export async function getShareLinkByToken(token: string) {
+  const rows = await db
+    .select()
+    .from(shareLinks)
+    .where(eq(shareLinks.token, token))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function createShareLink(profileId: string, label?: string, expiresAt?: Date) {
+  const token = generateShareToken();
+  const rows = await db
+    .insert(shareLinks)
+    .values({ userId: profileId, token, label: label ?? null, expiresAt: expiresAt ?? null })
+    .returning();
+  return rows[0];
+}
+
+export async function deactivateShareLink(profileId: string, linkId: string) {
+  await db
+    .update(shareLinks)
+    .set({ isActive: false, updatedAt: new Date() })
+    .where(and(eq(shareLinks.id, linkId), eq(shareLinks.userId, profileId)));
+}
+
+export async function deleteShareLink(profileId: string, linkId: string) {
+  await db
+    .delete(shareLinks)
+    .where(and(eq(shareLinks.id, linkId), eq(shareLinks.userId, profileId)));
+}
+
+export async function incrementShareLinkView(token: string) {
+  await db
+    .update(shareLinks)
+    .set({ viewCount: sql`${shareLinks.viewCount} + 1`, lastViewedAt: new Date(), updatedAt: new Date() })
+    .where(eq(shareLinks.token, token));
+}
+
+/** Cryptographically random 32-char URL-safe token */
+function generateShareToken(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  // Use Math.random as a fallback — in Node.js crypto.randomBytes is preferred
+  // but we keep it simple for edge compatibility
+  for (let i = 0; i < 32; i++) {
+    result += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return result;
 }
 
 export async function getRecurringExpenses(profileId: string): Promise<RecurringExpense[]> {

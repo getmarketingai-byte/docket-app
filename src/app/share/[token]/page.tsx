@@ -1,0 +1,252 @@
+import { notFound } from 'next/navigation';
+import { db } from '@/lib/db';
+import { receipts, shareLinks, userProfiles } from '@/lib/db/schema';
+import { eq, and, desc } from 'drizzle-orm';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+
+type PageProps = { params: Promise<{ token: string }> };
+
+async function getSharePortalData(token: string) {
+  // Resolve and validate the share link
+  const linkRows = await db
+    .select()
+    .from(shareLinks)
+    .where(eq(shareLinks.token, token))
+    .limit(1);
+
+  const link = linkRows[0];
+  if (!link || !link.isActive) return null;
+
+  // Check expiry
+  if (link.expiresAt && new Date(link.expiresAt) < new Date()) return null;
+
+  // Increment view count (fire-and-forget)
+  db.update(shareLinks)
+    .set({ viewCount: link.viewCount + 1, lastViewedAt: new Date(), updatedAt: new Date() })
+    .where(eq(shareLinks.token, token))
+    .catch(() => {});
+
+  // Get the owner's display name
+  const profileRows = await db
+    .select({ displayName: userProfiles.displayName })
+    .from(userProfiles)
+    .where(eq(userProfiles.id, link.userId))
+    .limit(1);
+
+  const ownerName = profileRows[0]?.displayName;
+
+  // Fetch complete receipts for this user
+  const receiptRows = await db
+    .select({
+      id: receipts.id,
+      merchant: receipts.merchant,
+      totalAmount: receipts.totalAmount,
+      gstAmount: receipts.gstAmount,
+      receiptDate: receipts.receiptDate,
+      category: receipts.category,
+      taxClaimable: receipts.taxClaimable,
+      taxCategory: receipts.taxCategory,
+      businessPercentage: receipts.businessPercentage,
+      notes: receipts.notes,
+      status: receipts.status,
+    })
+    .from(receipts)
+    .where(and(eq(receipts.userId, link.userId), eq(receipts.status, 'complete')))
+    .orderBy(desc(receipts.receiptDate))
+    .limit(500);
+
+  // Summary stats
+  const totalSpend = receiptRows.reduce((s, r) => s + parseFloat(r.totalAmount ?? '0'), 0);
+  const totalGst = receiptRows.reduce((s, r) => s + parseFloat(r.gstAmount ?? '0'), 0);
+  const claimable = receiptRows.filter((r) => r.taxClaimable === true);
+  const claimableTotal = claimable.reduce((s, r) => s + parseFloat(r.totalAmount ?? '0'), 0);
+  const claimableGst = claimable.reduce((s, r) => s + parseFloat(r.gstAmount ?? '0'), 0);
+
+  // FY boundaries (Australian FY: Jul–Jun)
+  const now = new Date();
+  const fyStart = new Date(now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1, 6, 1);
+  const fyLabel = `FY${String(fyStart.getFullYear()).slice(2)}/${String(fyStart.getFullYear() + 1).slice(2)}`;
+  const fyReceipts = receiptRows.filter(
+    (r) => r.receiptDate && new Date(r.receiptDate) >= fyStart,
+  );
+  const fyClaimable = fyReceipts.filter((r) => r.taxClaimable === true);
+  const fyClaimableTotal = fyClaimable.reduce((s, r) => s + parseFloat(r.totalAmount ?? '0'), 0);
+  const fyGst = fyReceipts.reduce((s, r) => s + parseFloat(r.gstAmount ?? '0'), 0);
+
+  return { link, ownerName, receiptRows, totalSpend, totalGst, claimableTotal, claimableGst, fyLabel, fyClaimableTotal, fyGst, fyReceiptCount: fyReceipts.length };
+}
+
+function fmt(n: number) {
+  return n.toLocaleString('en-AU', { style: 'currency', currency: 'AUD' });
+}
+
+export default async function SharePortalPage({ params }: PageProps) {
+  const { token } = await params;
+  const data = await getSharePortalData(token);
+  if (!data) notFound();
+
+  const { link, ownerName, receiptRows, totalSpend, totalGst, claimableTotal, claimableGst, fyLabel, fyClaimableTotal, fyGst, fyReceiptCount } = data;
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white border-b">
+        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-xl font-bold text-emerald-600">Docket</span>
+            <span className="text-muted-foreground text-sm">Accountant Portal</span>
+          </div>
+          {link.label && (
+            <span className="text-sm text-muted-foreground">{link.label}</span>
+          )}
+        </div>
+      </header>
+
+      <main className="max-w-5xl mx-auto px-4 py-8 space-y-8">
+        {/* Title */}
+        <div>
+          <h1 className="text-2xl font-bold">
+            {ownerName ? `${ownerName}'s Receipt Records` : 'Receipt Records'}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Read-only view — {receiptRows.length} complete receipt{receiptRows.length !== 1 ? 's' : ''} shared securely.
+          </p>
+        </div>
+
+        {/* Tax disclaimer */}
+        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800">
+          <strong>AI estimate — review with your accountant.</strong> Tax claimability assessments are generated by AI and are indicative only. They do not constitute tax advice. Always verify with a registered tax agent before lodging.
+        </div>
+
+        {/* Summary cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card>
+            <CardHeader className="pb-1 pt-4 px-4">
+              <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Spend</p>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <p className="text-xl font-bold">{fmt(totalSpend)}</p>
+              <p className="text-xs text-muted-foreground">{receiptRows.length} receipts</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-1 pt-4 px-4">
+              <p className="text-xs text-muted-foreground uppercase tracking-wide">Total GST</p>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <p className="text-xl font-bold">{fmt(totalGst)}</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-1 pt-4 px-4">
+              <p className="text-xs text-muted-foreground uppercase tracking-wide">{fyLabel} Claimable</p>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <p className="text-xl font-bold text-emerald-600">{fmt(fyClaimableTotal)}</p>
+              <p className="text-xs text-muted-foreground">{fyReceiptCount} receipts this FY</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-1 pt-4 px-4">
+              <p className="text-xs text-muted-foreground uppercase tracking-wide">{fyLabel} GST Credits</p>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <p className="text-xl font-bold text-blue-600">{fmt(fyGst)}</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Claimable all-time */}
+        <Card>
+          <CardHeader className="pb-2">
+            <h2 className="text-sm font-semibold">AI-assessed Claimable Summary (All Time)</h2>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-muted-foreground">Claimable spend</p>
+                <p className="font-semibold text-emerald-600">{fmt(claimableTotal)}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Claimable GST</p>
+                <p className="font-semibold text-blue-600">{fmt(claimableGst)}</p>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mt-3">
+              AI estimate — review with your accountant.
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Receipt list */}
+        <div>
+          <h2 className="text-lg font-semibold mb-4">All Receipts</h2>
+          <div className="rounded-lg border bg-white overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b">
+                <tr>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Date</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Merchant</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Category</th>
+                  <th className="text-right px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">GST</th>
+                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Amount</th>
+                  <th className="text-center px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Claimable</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {receiptRows.map((r) => (
+                  <tr key={r.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                      {r.receiptDate ? new Date(r.receiptDate).toLocaleDateString('en-AU') : '—'}
+                    </td>
+                    <td className="px-4 py-3 font-medium max-w-[200px] truncate">
+                      {r.merchant ?? 'Unknown'}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
+                      {r.category ?? '—'}
+                    </td>
+                    <td className="px-4 py-3 text-right text-muted-foreground hidden sm:table-cell">
+                      {r.gstAmount && parseFloat(r.gstAmount) > 0
+                        ? `$${parseFloat(r.gstAmount).toFixed(2)}`
+                        : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold">
+                      {r.totalAmount ? `$${parseFloat(r.totalAmount).toFixed(2)}` : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-center hidden md:table-cell">
+                      {r.taxClaimable === true ? (
+                        <Badge className="bg-emerald-100 text-emerald-700 border-0 text-xs">Yes</Badge>
+                      ) : r.taxClaimable === false ? (
+                        <Badge variant="outline" className="text-xs text-gray-500">No</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs text-amber-600 border-amber-200">Review</Badge>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {receiptRows.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
+                      No complete receipts to display.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <footer className="text-xs text-muted-foreground text-center pb-4">
+          Powered by Docket · This link was shared with you securely. Do not forward it to others.
+          {link.expiresAt && (
+            <> · Expires {new Date(link.expiresAt).toLocaleDateString('en-AU')}</>
+          )}
+        </footer>
+      </main>
+    </div>
+  );
+}
