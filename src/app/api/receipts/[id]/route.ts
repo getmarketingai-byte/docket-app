@@ -1,5 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
+import { z } from 'zod/v4';
 import { db } from '@/lib/db';
 import { receipts, userProfiles, auditLogs } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
@@ -12,6 +13,32 @@ async function getProfileId(clerkUserId: string) {
     .limit(1);
   return profiles[0]?.id ?? null;
 }
+
+const ReceiptPatchSchema = z.object({
+  merchant: z.string().max(200).nullish(),
+  merchantAbn: z.string().max(20).nullish(),
+  receiptDate: z.string().date().nullish(),
+  totalAmount: z.string().regex(/^\d+(\.\d{1,2})?$/).nullish(),
+  gstAmount: z.string().regex(/^\d+(\.\d{1,2})?$/).nullish(),
+  subtotalAmount: z.string().regex(/^\d+(\.\d{1,2})?$/).nullish(),
+  category: z.string().max(100).nullish(),
+  subcategory: z.string().max(100).nullish(),
+  notes: z.string().max(2000).nullish(),
+  paymentMethod: z.string().max(50).nullish(),
+  receiptType: z.string().max(50).nullish(),
+  taxClaimable: z.boolean().nullish(),
+  taxCategory: z.string().max(100).nullish(),
+  businessPercentage: z.number().min(0).max(100).nullish(),
+  fuelType: z.string().max(50).nullish(),
+  fuelLitres: z.string().regex(/^\d+(\.\d{1,3})?$/).nullish(),
+  odometerReading: z.number().int().min(0).nullish(),
+  reimbursable: z.boolean().nullish(),
+  reimbursementStatus: z.enum(['pending', 'submitted', 'approved', 'paid', 'rejected']).nullish(),
+  reimbursementSource: z.string().max(200).nullish(),
+  reimbursementAmount: z.string().regex(/^\d+(\.\d{1,2})?$/).nullish(),
+  reimbursementSubmittedAt: z.string().datetime().nullish(),
+  reimbursementReceivedAt: z.string().datetime().nullish(),
+});
 
 export async function GET(
   _req: Request,
@@ -53,23 +80,29 @@ export async function PATCH(
 
   if (!existing[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  const body = await req.json();
-  const allowed = [
-    'merchant', 'merchantAbn', 'receiptDate', 'totalAmount', 'gstAmount',
-    'subtotalAmount', 'category', 'subcategory', 'notes', 'paymentMethod',
-    'receiptType', 'taxClaimable', 'taxCategory', 'businessPercentage',
-    'fuelType', 'fuelLitres', 'odometerReading',
-    'reimbursable', 'reimbursementStatus', 'reimbursementSource',
-    'reimbursementAmount', 'reimbursementSubmittedAt', 'reimbursementReceivedAt',
-  ];
+  let rawBody: unknown;
+  try {
+    rawBody = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
 
+  const parsed = ReceiptPatchSchema.safeParse(rawBody);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: 'Validation failed', issues: parsed.error.issues.map((i) => i.message) },
+      { status: 422 },
+    );
+  }
+
+  const body = parsed.data;
   const updates: Record<string, unknown> = { updatedAt: new Date() };
   const auditEntries: { field: string; newValue: string | null }[] = [];
 
-  for (const key of allowed) {
-    if (key in body) {
-      updates[key] = body[key];
-      auditEntries.push({ field: key, newValue: body[key] == null ? null : String(body[key]) });
+  for (const [key, value] of Object.entries(body)) {
+    if (value !== undefined) {
+      updates[key] = value;
+      auditEntries.push({ field: key, newValue: value == null ? null : String(value) });
     }
   }
 
