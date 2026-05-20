@@ -7,6 +7,7 @@ import { SpendingChart } from '@/components/analytics/spending-chart';
 import { CategoryDonut } from '@/components/analytics/category-donut';
 import { MerchantList } from '@/components/analytics/merchant-list';
 import { TaxSummary } from '@/components/analytics/tax-summary';
+import { WelcomeGuide } from '@/components/onboarding/welcome-guide';
 import {
   getCurrentUserProfileId,
   getUserReceipts,
@@ -282,18 +283,7 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {stats.total === 0 && (
-        <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
-          <div className="text-5xl">🧾</div>
-          <h2 className="text-xl font-semibold">Welcome to Docket</h2>
-          <p className="text-muted-foreground max-w-sm">
-            Upload your first receipt and AI will extract and categorise it automatically.
-          </p>
-          <Link href="/dashboard/upload" className={cn(buttonVariants())}>
-            Upload receipts
-          </Link>
-        </div>
-      )}
+      {stats.total === 0 && <WelcomeGuide />}
 
       <p className="text-xs text-muted-foreground text-center">
         AI estimates only — review all tax decisions with your accountant.

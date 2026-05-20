@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { ReceiptCard } from '@/components/receipts/receipt-card';
 import { SearchFilters } from '@/components/receipts/search-filters';
+import { SearchEmptyState } from '@/components/onboarding/welcome-guide';
 import { getCurrentUserProfileId, getUserReceipts } from '@/lib/db/queries';
 
 const CATEGORIES = [
@@ -53,12 +54,10 @@ export default async function SearchPage({ searchParams }: PageProps) {
         }}
       />
 
-      {hasFilters || q ? (
+      {receipts.length > 0 ? (
         <div>
           <p className="text-sm text-muted-foreground mb-4">
-            {receipts.length === 0
-              ? 'No receipts match your filters.'
-              : `${receipts.length} receipt${receipts.length !== 1 ? 's' : ''} found`}
+            {receipts.length} receipt{receipts.length !== 1 ? 's' : ''} found
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {receipts.map((r) => (
@@ -78,10 +77,7 @@ export default async function SearchPage({ searchParams }: PageProps) {
           </div>
         </div>
       ) : (
-        <div className="text-center py-16 text-muted-foreground">
-          <p className="text-lg">Search your receipts</p>
-          <p className="text-sm mt-1">Use the filters above to find receipts by merchant, date, category, and more.</p>
-        </div>
+        <SearchEmptyState query={q} />
       )}
     </div>
   );

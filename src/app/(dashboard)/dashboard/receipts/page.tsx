@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { buttonVariants } from '@/components/ui/button';
 import { ReceiptsTimeline } from '@/components/receipts/receipts-timeline';
+import { ReceiptsEmptyState } from '@/components/onboarding/welcome-guide';
 import { getCurrentUserProfileId, getUserReceipts } from '@/lib/db/queries';
 import { cn } from '@/lib/utils';
 
@@ -67,16 +68,7 @@ export default async function ReceiptsPage({ searchParams }: PageProps) {
       </div>
 
       {receipts.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
-          <div className="text-5xl">🧾</div>
-          <h2 className="text-xl font-semibold">No receipts yet</h2>
-          <p className="text-muted-foreground max-w-sm">
-            Upload your first receipt and let AI extract and categorise it automatically.
-          </p>
-          <Link href="/dashboard/upload" className={cn(buttonVariants())}>
-            Upload receipts
-          </Link>
-        </div>
+        <ReceiptsEmptyState />
       ) : (
         <>
           <ReceiptsTimeline groups={groups} />
