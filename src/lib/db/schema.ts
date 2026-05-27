@@ -229,3 +229,26 @@ export const vehicleFuelLogs = pgTable(
     vehicleFuelLogIdx: index('vehicle_fuel_logs_vehicle_idx').on(t.vehicleId),
   }),
 );
+
+// ─── user_feedback ────────────────────────────────────────────────────────────
+export const userFeedback = pgTable(
+  'user_feedback',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: text('user_id').notNull(), // Clerk userId
+    type: text('type').notNull(), // bug | feature | suggestion
+    description: text('description').notNull(),
+    screenshotUrl: text('screenshot_url'),
+    pageUrl: text('page_url'),
+    browserInfo: text('browser_info'),
+    status: text('status').notNull().default('new'), // new | reviewing | approved | rejected | implemented
+    ceoNotes: text('ceo_notes'),
+    priority: text('priority'), // critical | high | medium | low
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (t) => ({
+    feedbackStatusIdx: index('user_feedback_status_idx').on(t.status),
+    feedbackUserIdx: index('user_feedback_user_idx').on(t.userId),
+  }),
+);
